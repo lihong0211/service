@@ -99,7 +99,7 @@ def list():
     """查询阿里报告列表"""
     data = request.get_json() if request.is_json else {}
     page = data.get("page", 1)
-    size = data.get("size", 10)
+    size = min(data.get("size", 10), 10000)  # 默认10条，最大50条
     query = data.get("query")
 
     try:

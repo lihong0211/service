@@ -52,6 +52,7 @@ def list_statistics():
     today = datetime.now().strftime("%Y-%m-%d")
     startTime = data.get("startTime", f"{today} 00:00:00")
     endTime = data.get("endTime", f"{today} 23:59:59")
+    # 注意：此接口使用分组统计，不进行分页限制
 
     try:
         # 构建查询条件
