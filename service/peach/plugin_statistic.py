@@ -1,11 +1,11 @@
-# service/peach/pluginStatistic/__init__.py
+# service/peach/plugin_statistic.py
 """
-插件统计服务模块 - 使用ORM
+插件统计服务模块 -
 """
 from datetime import datetime
 from flask import request, jsonify
 from app.app import db
-from model.peach import PluginStatistic, Version
+from model.peach import PluginStatistic
 from sqlalchemy import func, text
 
 
@@ -26,16 +26,6 @@ def add():
 
         if status == "offline":
             return jsonify({"code": 200, "msg": "success"})
-
-        # 添加版本信息
-        existing_version = Version.query.filter(
-            Version.name == userName, Version.platform == platform, Version.deleted_at.is_(None)
-        ).first()
-
-        if existing_version:
-            Version.update({"id": existing_version.id, "version": pluginVersion})
-        else:
-            Version.insert({"version": pluginVersion, "name": userName, "platform": platform})
 
         # 如果是在线状态，插入统计记录
         if status == "online":
@@ -78,32 +68,31 @@ def list_statistics():
         query = query.filter(PluginStatistic.logout_time.isnot(None))
 
         # 使用原生SQL进行分组统计（因为需要日期格式化和时间计算）
-        results = (
-            db.session.query(
-                PluginStatistic.user_name,
-                PluginStatistic.platform,
-                PluginStatistic.plugin_version,
-                func.DATE_FORMAT(PluginStatistic.login_time, "%Y-%m-%d").label("date"),
+        results = db.session.query(
+            PluginStatistic.user_name,
+            PluginStatistic.platform,
+            PluginStatistic.plugin_version,
+            func.DATE_FORMAT(PluginStatistic.login_time, "%Y-%m-%d").label("date"),
+            func.SUM(
+                func.TIMESTAMPDIFF(
+                    text("SECOND"),
+                    PluginStatistic.login_time,
+                    PluginStatistic.logout_time,
+                )
+            ).label("seconds"),
+            func.SEC_TO_TIME(
                 func.SUM(
                     func.TIMESTAMPDIFF(
-                        text("SECOND"), PluginStatistic.login_time, PluginStatistic.logout_time
+                        text("SECOND"),
+                        PluginStatistic.login_time,
+                        PluginStatistic.logout_time,
                     )
-                ).label("seconds"),
-                func.SEC_TO_TIME(
-                    func.SUM(
-                        func.TIMESTAMPDIFF(
-                            text("SECOND"),
-                            PluginStatistic.login_time,
-                            PluginStatistic.logout_time,
-                        )
-                    )
-                ).label("hms"),
-            )
-            .filter(
-                PluginStatistic.login_time >= startTime,
-                PluginStatistic.login_time <= endTime,
-                PluginStatistic.logout_time.isnot(None),
-            )
+                )
+            ).label("hms"),
+        ).filter(
+            PluginStatistic.login_time >= startTime,
+            PluginStatistic.login_time <= endTime,
+            PluginStatistic.logout_time.isnot(None),
         )
 
         if platform:
@@ -155,29 +144,43 @@ def detail():
             "login_time": {"type": "bt", "start": startTime, "end": endTime},
         }
 
-        results = PluginStatistic.select_by(criterion)
+        # 只查询实际存在的字段，避免查询不存在的 create_at、update_at、deleted_at
+        results = (
+            PluginStatistic.builder_query(criterion)
+            .with_entities(
+                PluginStatistic.id,
+                PluginStatistic.user_name,
+                PluginStatistic.platform,
+                PluginStatistic.plugin_version,
+                PluginStatistic.login_time,
+                PluginStatistic.logout_time,
+                PluginStatistic.status,
+                PluginStatistic.duration,
+            )
+            .all()
+        )
 
         data_list = []
         for item in results:
             duration_str = None
-            if item.duration:
-                hours = item.duration // 3600
-                minutes = (item.duration % 3600) // 60
-                seconds = item.duration % 60
+            if item[7]:  # duration
+                hours = item[7] // 3600
+                minutes = (item[7] % 3600) // 60
+                seconds = item[7] % 60
                 duration_str = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
 
             data_list.append(
                 {
-                    "user_name": item.user_name,
-                    "platform": item.platform,
-                    "plugin_version": item.plugin_version,
+                    "user_name": item[1],
+                    "platform": item[2],
+                    "plugin_version": item[3],
                     "duration": duration_str,
-                    "login_time": item.login_time.strftime("%Y-%m-%d %H:%M:%S")
-                    if item.login_time
-                    else None,
-                    "logout_time": item.logout_time.strftime("%Y-%m-%d %H:%M:%S")
-                    if item.logout_time
-                    else None,
+                    "login_time": (
+                        item[4].strftime("%Y-%m-%d %H:%M:%S") if item[4] else None
+                    ),
+                    "logout_time": (
+                        item[5].strftime("%Y-%m-%d %H:%M:%S") if item[5] else None
+                    ),
                 }
             )
 

@@ -2,20 +2,9 @@
 """
 主应用文件
 """
-from flask import Flask, jsonify
+from flask import jsonify
 from app.app import app, db
 from routes import api_bp
-from model import Words, Root, Affix, Dialogue, LivingSpeech
-from model.peach import (
-    Chat,
-    Rp,
-    Manual,
-    Version,
-    AliRpCheck,
-    PluginStatistic,
-    CheckReport,
-    Config,
-)
 
 # 注册蓝图
 app.register_blueprint(api_bp)

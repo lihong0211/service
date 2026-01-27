@@ -1,4 +1,4 @@
-# model/common/my_model.py
+# model/common/base_model.py
 """
 基础模型类
 """
@@ -12,17 +12,28 @@ def get_datetime_now():
     return datetime.now()
 
 
-class MyModel:
+class BaseModel:
     """基础模型类，提供通用的CRUD方法"""
+
     query = db.session.query_property()
     __tablename__ = "--"
     deleted_at_value = None
     id = Column(INTEGER(11), primary_key=True)
     # 注意：如果数据库表中没有这些字段，需要设置为可选或使用 name 参数映射
     # 如果表中确实没有这些字段，可以注释掉或设置为可选
-    create_at = Column(DateTime(), nullable=True, default=get_datetime_now, comment="创建时间")
-    update_at = Column(DateTime(), nullable=True, default=get_datetime_now, onupdate=get_datetime_now, comment="修改时间")
-    deleted_at = Column(DateTime(), nullable=True, name='deleted_at', comment="删除时间")
+    create_at = Column(
+        DateTime(), nullable=True, default=get_datetime_now, comment="创建时间"
+    )
+    update_at = Column(
+        DateTime(),
+        nullable=True,
+        default=get_datetime_now,
+        onupdate=get_datetime_now,
+        comment="修改时间",
+    )
+    deleted_at = Column(
+        DateTime(), nullable=True, name="deleted_at", comment="删除时间"
+    )
 
     @classmethod
     def insert(cls, json_data, commit=True):
@@ -54,9 +65,13 @@ class MyModel:
             # 处理pass字段（Python保留字）
             if key == "pass":
                 key = "pass_flag"
-            if hasattr(cls, key) and value is not None and key not in ["id", "create_at", "update_at", "deleted_at"]:
+            if (
+                hasattr(cls, key)
+                and value is not None
+                and key not in ["id", "create_at", "update_at", "deleted_at"]
+            ):
                 update_cols[key] = value
-        cls.query.where(cls.id == json_data["id"]).update(update_cols)
+        db.session.query(cls).where(cls.id == json_data["id"]).update(update_cols)
         if commit:
             db.session.commit()
         return json_data["id"]
@@ -66,7 +81,11 @@ class MyModel:
         """批量更新"""
         update_cols = {}
         for key, value in update_values.items():
-            if hasattr(cls, key) and value is not None and key not in ["id", "create_at", "update_at", "deleted_at"]:
+            if (
+                hasattr(cls, key)
+                and value is not None
+                and key not in ["id", "create_at", "update_at", "deleted_at"]
+            ):
                 update_cols[key] = value
         query = cls.builder_query(criterion)
         query.update(update_cols)
@@ -77,7 +96,7 @@ class MyModel:
     def delete(cls, primary_key, commit=True):
         """软删除"""
         update_cols = {cls.deleted_at: datetime.now()}
-        cls.query.where(cls.id == primary_key).update(update_cols)
+        db.session.query(cls).where(cls.id == primary_key).update(update_cols)
         if commit:
             db.session.commit()
 
@@ -92,7 +111,7 @@ class MyModel:
     @classmethod
     def get_by_id(cls, primary_key):
         """根据ID获取数据"""
-        return cls.query.where(cls.id == primary_key, cls.deleted_at.is_(None)).first()
+        return db.session.query(cls).where(cls.id == primary_key, cls.deleted_at.is_(None)).first()
 
     @classmethod
     def delete_by(cls, criterion, commit=True):
@@ -116,7 +135,7 @@ class MyModel:
         """构建查询"""
         if criterion is None:
             criterion = {}
-        query = cls.query
+        query = db.session.query(cls)
         order_by_val = None
         for key in criterion:
             val = criterion[key]
@@ -146,11 +165,16 @@ class MyModel:
                     elif compare == "bt":
                         start = val.get("start", None)
                         end = val.get("end", None)
-                        query = query.where(getattr(cls, key) >= start, getattr(cls, key) <= end)
+                        query = query.where(
+                            getattr(cls, key) >= start, getattr(cls, key) <= end
+                        )
                 else:
                     query = query.where(getattr(cls, key) == val)
         if cls.deleted_at_value is None:
             query = query.where(cls.deleted_at.is_(None))
+        elif cls.deleted_at_value is False:
+            # 跳过 deleted_at 过滤（表没有这个字段）
+            pass
         else:
             query = query.where(cls.deleted_at == cls.deleted_at_value)
         if order_by_val is not None:
@@ -196,4 +220,3 @@ class MyModel:
         query = cls.builder_query(criterion)
         # 使用 with_entities 只查询 id，避免查询不存在的字段
         return query.with_entities(cls.id).count()
-

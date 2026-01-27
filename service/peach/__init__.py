@@ -2,8 +2,6 @@
 """
 Peach服务模块
 """
-from . import pddReport, version, aliReport, check, config, pluginStatistic
+from . import ali_report, check_result, plugin_statistic
 
-__all__ = ['pddReport', 'version', 'aliReport', 'check', 'config', 'pluginStatistic']
-
-
+__all__ = ["ali_report", "check_result", "plugin_statistic"]

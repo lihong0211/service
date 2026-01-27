@@ -1,13 +1,13 @@
-# model/words_model.py
+# model/english/words.py
 """
 单词模型
 """
 from sqlalchemy import Column, String, Text, Integer
 from app.app import db
-from model.common.my_model import MyModel
+from model.common.base_model import BaseModel
 
 
-class Words(db.Model, MyModel):
+class Words(db.Model, BaseModel):
     __tablename__ = "words"
 
     word = Column(String(100), nullable=False, comment="单词")
@@ -21,4 +21,3 @@ class Words(db.Model, MyModel):
     collocation_meaning = Column(String(200), nullable=True, comment="搭配含义")
     sentence = Column(Text, nullable=True, comment="例句")
     mastered = Column(Integer(), default=0, comment="是否掌握")
-

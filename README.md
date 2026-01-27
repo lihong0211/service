@@ -49,21 +49,6 @@ gunicorn -c gunicorn.conf.py wsgi:app
 - POST `/living-speech/update` - 更新生活用语
 - POST `/living-speech/list` - 查询生活用语列表
 
-### 拼多多报告相关
-
-- POST `/pddReport/chat/add` - 添加聊天记录
-- POST `/pddReport/chat/list` - 查询聊天记录列表
-- POST `/pddReport/rp/add` - 添加处方记录
-- POST `/pddReport/rp/list` - 查询处方记录列表
-- POST `/pddReport/manual/add` - 添加手动记录
-- POST `/pddReport/manual/list` - 查询手动记录列表
-
-### 版本相关
-
-- POST `/jdReport/version/add` - 添加版本
-- POST `/jdReport/version/list` - 查询版本列表
-- POST `/peach/version/add` - 添加版本
-
 ### 阿里报告相关
 
 - POST `/aliReport/rp/add` - 添加阿里报告

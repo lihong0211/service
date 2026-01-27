@@ -2,23 +2,12 @@
 """
 Peach模型模块
 """
-from .chat_model import Chat
-from .rp_model import Rp
-from .manual_model import Manual
-from .version_model import Version
-from .ali_rp_check_model import AliRpCheck
-from .plugin_statistic_model import PluginStatistic
-from .check_report_model import CheckReport
-from .config_model import Config
+from .ali_report import AliRpCheck
+from .plugin_statistic import PluginStatistic
+from .check_result import CheckResult
 
 __all__ = [
-    "Chat",
-    "Rp",
-    "Manual",
-    "Version",
     "AliRpCheck",
     "PluginStatistic",
-    "CheckReport",
-    "Config",
+    "CheckResult",
 ]
-

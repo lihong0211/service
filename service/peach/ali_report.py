@@ -1,11 +1,10 @@
-# service/peach/aliReport/__init__.py
+# service/peach/ali_report.py
 """
-阿里报告服务模块 - 使用ORM
+阿里报告服务模块 -
 """
 from flask import request, jsonify
 from app.app import db
 from model.peach import AliRpCheck
-from sqlalchemy import func
 
 
 def add():
@@ -28,7 +27,7 @@ def add():
             "patientAge": patientAge,
             "primaryDiagnosis": primaryDiagnosis,
             "medicines": medicines,
-            "pass": pass_flag,  # pass字段会在MyModel.loads中自动映射为pass_flag
+            "pass": pass_flag,  # pass字段会在BaseModel.loads中自动映射为pass_flag
             "reason": reason,
             "query": query,
             "rpID": rpID,
@@ -83,13 +82,89 @@ def update():
         else:
             # 增加拒绝次数 - 使用原生SQL更新，因为需要原子操作
             from sqlalchemy import text
+
             db.session.execute(
                 text("UPDATE ali_rp_check SET refuse = refuse + 1 WHERE rpID = :rpID"),
-                {"rpID": rpID}
+                {"rpID": rpID},
             )
             db.session.commit()
 
         return jsonify({"code": 200, "msg": "success"})
     except Exception as e:
         db.session.rollback()
+        return jsonify({"code": 500, "msg": str(e)})
+
+
+def list():
+    """查询阿里报告列表"""
+    data = request.get_json() if request.is_json else {}
+    page = data.get("page", 1)
+    size = data.get("size", 10)
+    query = data.get("query")
+
+    try:
+        # 构建查询条件
+        criterion = {}
+        if query:
+            for key, value in query.items():
+                if value:
+                    criterion[key] = {"type": "like", "value": value}
+
+        # 获取总数
+        total = AliRpCheck.count(criterion)
+
+        # 获取分页数据
+        offset = (page - 1) * size
+        # 只查询实际存在的字段，避免查询不存在的 create_at、update_at、deleted_at
+        results = (
+            AliRpCheck.builder_query(criterion)
+            .with_entities(
+                AliRpCheck.id,
+                AliRpCheck.pharmacist,
+                AliRpCheck.patientSex,
+                AliRpCheck.patientAge,
+                AliRpCheck.primaryDiagnosis,
+                AliRpCheck.medicines,
+                AliRpCheck.pass_flag,
+                AliRpCheck.reason,
+                AliRpCheck.query,
+                AliRpCheck.rpID,
+                AliRpCheck.refuse,
+                AliRpCheck.costTime,
+            )
+            .offset(offset)
+            .limit(size)
+            .all()
+        )
+
+        data_list = []
+        for item in results:
+            data_list.append(
+                {
+                    "id": item[0],
+                    "pharmacist": item[1],
+                    "patientSex": item[2],
+                    "patientAge": item[3],
+                    "primaryDiagnosis": item[4],
+                    "medicines": item[5],
+                    "pass_flag": item[6],
+                    "reason": item[7],
+                    "query": item[8],
+                    "rpID": item[9],
+                    "refuse": item[10] or 0,
+                    "costTime": item[11],
+                }
+            )
+
+        return jsonify(
+            {
+                "code": 200,
+                "data": {
+                    "data": data_list,
+                    "total": total,
+                    "page": page,
+                },
+            }
+        )
+    except Exception as e:
         return jsonify({"code": 500, "msg": str(e)})

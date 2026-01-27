@@ -2,8 +2,8 @@
 """
 服务模块
 """
-from . import words, root, affix, dialogue, livingSpeech
+from . import english
 
-__all__ = ['words', 'root', 'affix', 'dialogue', 'livingSpeech']
+__all__ = ['english']
 
 
