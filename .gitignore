@@ -46,4 +46,6 @@ logs/
 
 .DS_Store
 
+# Agent / 示例遗留空目录，勿提交
+workspace/
 

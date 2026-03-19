@@ -3,15 +3,14 @@
 词根服务模块 -
 """
 import json
-from flask import request, jsonify
 from app.app import db
+from app.errors import unexpected_error_response
 from model.english.root import Root
 from utils import try_json_parse
 
 
-def add():
+def add(data: dict):
     """增加词根"""
-    data = request.get_json()
     name = data.get("name")
     meaning = data.get("meaning")
     similar = data.get("similar")
@@ -28,49 +27,23 @@ def add():
             "cases": cases_str,
         }
         Root.insert(root_data)
-
-        return jsonify(
-            {
-                "code": 200,
-                "msg": "success",
-            }
-        )
+        return {"code": 200, "msg": "success"}
     except Exception as e:
-        db.session.rollback()
-        return jsonify(
-            {
-                "code": 500,
-                "msg": str(e),
-            }
-        )
+        return unexpected_error_response(e, db.session)
 
 
-def delete():
+def delete(data: dict):
     """删除词根"""
-    data = request.get_json()
     root_id = data.get("id")
-
     try:
         Root.delete(root_id)
-        return jsonify(
-            {
-                "code": 200,
-                "msg": "success",
-            }
-        )
+        return {"code": 200, "msg": "success"}
     except Exception as e:
-        db.session.rollback()
-        return jsonify(
-            {
-                "code": 500,
-                "msg": str(e),
-            }
-        )
+        return unexpected_error_response(e, db.session)
 
 
-def update():
+def update(data: dict):
     """更新词根"""
-    data = request.get_json()
     name = data.get("name")
     meaning = data.get("meaning")
     similar = data.get("similar")
@@ -89,28 +62,15 @@ def update():
             "cases": cases_str,
         }
         Root.update(root_data)
-
-        return jsonify(
-            {
-                "code": 200,
-                "msg": "success",
-            }
-        )
+        return {"code": 200, "msg": "success"}
     except Exception as e:
-        db.session.rollback()
-        return jsonify(
-            {
-                "code": 500,
-                "msg": str(e),
-            }
-        )
+        return unexpected_error_response(e, db.session)
 
 
-def list_roots():
+def list_roots(data: dict | None = None):
     """查询词根列表"""
     try:
         roots = Root.select_by()
-
         data_list = []
         for item in roots:
             data_list.append(
@@ -122,22 +82,10 @@ def list_roots():
                     "cases": try_json_parse(item.cases),
                 }
             )
-
-        return jsonify(
-            {
-                "code": 200,
-                "data": {
-                    "data": data_list,
-                    "total": len(data_list),
-                    "page": 1,
-                },
-                "msg": "success",
-            }
-        )
+        return {
+            "code": 200,
+            "data": {"data": data_list, "total": len(data_list), "page": 1},
+            "msg": "success",
+        }
     except Exception as e:
-        return jsonify(
-            {
-                "code": 500,
-                "msg": str(e),
-            }
-        )
+        return unexpected_error_response(e, db.session)

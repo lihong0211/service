@@ -2,14 +2,13 @@
 """
 检查服务模块 -
 """
-from flask import request, jsonify
 from app.app import db
+from app.errors import unexpected_error_response
 from model.peach import CheckResult
 
 
-def add():
+def add(data: dict):
     """增加检查记录"""
-    data = request.get_json()
     platform = data.get("platform")
     patientSex = data.get("patientSex")
     patientAge = data.get("patientAge")
@@ -30,7 +29,7 @@ def add():
     if not all(
         [medicineName, specification, takeDirection, takeFrequence, takeDose, formType]
     ):
-        return jsonify({"code": 500, "msg": "缺少参数"})
+        return {"code": 400, "msg": "缺少参数"}
 
     try:
         check_data = {
@@ -52,34 +51,26 @@ def add():
             "formType": formType,
         }
         CheckResult.insert(check_data)
-
-        return jsonify({"code": 200, "msg": "success"})
+        return {"code": 200, "msg": "success"}
     except Exception as e:
-        db.session.rollback()
-        return jsonify({"code": 500, "msg": str(e)})
+        return unexpected_error_response(e, db.session)
 
 
-def list():
+def list(data: dict | None = None):
     """查询检查记录列表"""
-    data = request.get_json() if request.is_json else {}
+    data = data or {}
     page = data.get("page", 1)
-    size = min(data.get("size", 10), 10000)  # 默认10条，最大50条
+    size = min(data.get("size", 10), 10000)
     query = data.get("query")
 
     try:
-        # 构建查询条件
         criterion = {}
         if query:
             for key, value in query.items():
                 if value:
                     criterion[key] = {"type": "like", "value": value}
 
-        # 获取总数
-        # total = CheckResult.count(criterion)
-
-        # 获取分页数据
         offset = (page - 1) * size
-        # 只查询实际存在的字段，避免查询不存在的 create_at、update_at、deleted_at、pdd_report
         results = (
             CheckResult.builder_query(criterion)
             .with_entities(
@@ -130,15 +121,9 @@ def list():
                 }
             )
 
-        return jsonify(
-            {
-                "code": 200,
-                "data": {
-                    "data": data_list,
-                    "total": 5018980,
-                    "page": page,
-                },
-            }
-        )
+        return {
+            "code": 200,
+            "data": {"data": data_list, "total": 5018980, "page": page},
+        }
     except Exception as e:
-        return jsonify({"code": 500, "msg": str(e)})
+        return unexpected_error_response(e, db.session)

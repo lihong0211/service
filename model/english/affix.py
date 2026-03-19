@@ -3,11 +3,11 @@
 词缀模型
 """
 from sqlalchemy import Column, String, Text
-from app.app import db
+from app.app import Base
 from model.common.base_model import BaseModel
 
 
-class Affix(db.Model, BaseModel):
+class Affix(Base, BaseModel):
     __tablename__ = "affix"
 
     name = Column(String(100), nullable=False, comment="词缀名称")

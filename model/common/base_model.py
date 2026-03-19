@@ -15,7 +15,6 @@ def get_datetime_now():
 class BaseModel:
     """基础模型类，提供通用的CRUD方法"""
 
-    query = db.session.query_property()
     __tablename__ = "--"
     deleted_at_value = None
     id = Column(INTEGER(11), primary_key=True)
@@ -111,7 +110,7 @@ class BaseModel:
     @classmethod
     def get_by_id(cls, primary_key):
         """根据ID获取数据"""
-        return db.session.query(cls).where(cls.id == primary_key, cls.deleted_at.is_(None)).first()
+        return db.session.query(cls).where(cls.id == primary_key).where(cls.deleted_at.is_(None)).first()
 
     @classmethod
     def delete_by(cls, criterion, commit=True):

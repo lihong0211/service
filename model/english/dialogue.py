@@ -3,11 +3,11 @@
 对话模型
 """
 from sqlalchemy import Column, String, Text
-from app.app import db
+from app.app import Base
 from model.common.base_model import BaseModel
 
 
-class Dialogue(db.Model, BaseModel):
+class Dialogue(Base, BaseModel):
     __tablename__ = "dialogue"
 
     dialogue = Column(Text, nullable=True, comment="对话内容")

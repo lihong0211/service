@@ -3,11 +3,11 @@
 单词模型
 """
 from sqlalchemy import Column, String, Text, Integer
-from app.app import db
+from app.app import Base
 from model.common.base_model import BaseModel
 
 
-class Words(db.Model, BaseModel):
+class Words(Base, BaseModel):
     __tablename__ = "words"
 
     word = Column(String(100), nullable=False, comment="单词")

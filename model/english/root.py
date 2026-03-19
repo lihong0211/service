@@ -3,11 +3,11 @@
 词根模型
 """
 from sqlalchemy import Column, String, Text
-from app.app import db
+from app.app import Base
 from model.common.base_model import BaseModel
 
 
-class Root(db.Model, BaseModel):
+class Root(Base, BaseModel):
     __tablename__ = "root"
 
     name = Column(String(100), nullable=False, comment="词根名称")

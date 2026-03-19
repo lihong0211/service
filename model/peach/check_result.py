@@ -3,11 +3,11 @@
 检查报告模型 - PDD数据库
 """
 from sqlalchemy import Column, String, Text, Integer
-from app.app import db
+from app.app import Base
 from model.common.base_model import BaseModel
 
 
-class CheckResult(db.Model, BaseModel):
+class CheckResult(Base, BaseModel):
     __tablename__ = "check_result"
     __bind_key__ = "pdd"  # 使用pdd数据库绑定
     deleted_at_value = False  # 禁用 deleted_at 过滤

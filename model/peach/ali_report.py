@@ -3,11 +3,11 @@
 阿里报告检查模型 - PDD数据库
 """
 from sqlalchemy import Column, String, Text, Integer, Float
-from app.app import db
+from app.app import Base
 from model.common.base_model import BaseModel
 
 
-class AliRpCheck(db.Model, BaseModel):
+class AliRpCheck(Base, BaseModel):
     __tablename__ = "ali_rp_check"
     __bind_key__ = "pdd"  # 使用pdd数据库绑定
     deleted_at_value = False  # 禁用 deleted_at 过滤

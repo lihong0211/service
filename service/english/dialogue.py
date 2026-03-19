@@ -3,15 +3,14 @@
 对话服务模块 -
 """
 import json
-from flask import request, jsonify
 from app.app import db
+from app.errors import unexpected_error_response
 from model.english.dialogue import Dialogue
 from utils import try_json_parse
 
 
-def add():
+def add(data: dict):
     """增加对话"""
-    data = request.get_json()
     dialogue_data = data.get("dialogue")
     meaning = data.get("meaning")
     words = data.get("words")
@@ -30,49 +29,23 @@ def add():
             "section": section,
         }
         Dialogue.insert(dialogue_obj)
-
-        return jsonify(
-            {
-                "code": 200,
-                "msg": "success",
-            }
-        )
+        return {"code": 200, "msg": "success"}
     except Exception as e:
-        db.session.rollback()
-        return jsonify(
-            {
-                "code": 500,
-                "msg": str(e),
-            }
-        )
+        return unexpected_error_response(e, db.session)
 
 
-def delete():
+def delete(data: dict):
     """删除对话"""
-    data = request.get_json()
     dialogue_id = data.get("id")
-
     try:
         Dialogue.delete(dialogue_id)
-        return jsonify(
-            {
-                "code": 200,
-                "msg": "success",
-            }
-        )
+        return {"code": 200, "msg": "success"}
     except Exception as e:
-        db.session.rollback()
-        return jsonify(
-            {
-                "code": 500,
-                "msg": str(e),
-            }
-        )
+        return unexpected_error_response(e, db.session)
 
 
-def update():
+def update(data: dict):
     """更新对话"""
-    data = request.get_json()
     dialogue_data = data.get("dialogue")
     meaning = data.get("meaning")
     words = data.get("words")
@@ -93,28 +66,15 @@ def update():
             "section": section,
         }
         Dialogue.update(dialogue_obj)
-
-        return jsonify(
-            {
-                "code": 200,
-                "msg": "success",
-            }
-        )
+        return {"code": 200, "msg": "success"}
     except Exception as e:
-        db.session.rollback()
-        return jsonify(
-            {
-                "code": 500,
-                "msg": str(e),
-            }
-        )
+        return unexpected_error_response(e, db.session)
 
 
-def list_dialogues():
+def list_dialogues(data: dict | None = None):
     """查询对话列表"""
     try:
         dialogues = Dialogue.select_by()
-
         data_list = []
         for item in dialogues:
             data_list.append(
@@ -126,22 +86,10 @@ def list_dialogues():
                     "section": item.section,
                 }
             )
-
-        return jsonify(
-            {
-                "code": 200,
-                "data": {
-                    "data": data_list,
-                    "total": len(data_list),
-                    "page": 1,
-                },
-                "msg": "success",
-            }
-        )
+        return {
+            "code": 200,
+            "data": {"data": data_list, "total": len(data_list), "page": 1},
+            "msg": "success",
+        }
     except Exception as e:
-        return jsonify(
-            {
-                "code": 500,
-                "msg": str(e),
-            }
-        )
+        return unexpected_error_response(e, db.session)

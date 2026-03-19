@@ -2,16 +2,14 @@
 """
 单词服务模块 -
 """
-import json
-from flask import request, jsonify
-from app.app import app, db
+from app.app import db
+from app.errors import unexpected_error_response
 from model.english.words import Words
 from utils import try_json_parse
 
 
-def add():
+def add(data: dict):
     """增加单词"""
-    data = request.get_json()
     word = data.get("word")
     word_type = data.get("type")
     meaning = data.get("meaning")
@@ -25,27 +23,17 @@ def add():
     mastered = data.get("mastered", 0)
 
     if not word or not meaning:
-        return jsonify(
-            {
-                "code": 500,
-                "msg": "word or meaning is empty",
-            }
-        )
+        return {"code": 400, "msg": "word or meaning is empty"}
 
     try:
-        # 检查单词是否已存在
-        existing = Words.query.filter(
-            Words.word == word, Words.deleted_at.is_(None)
-        ).first()
+        existing = (
+            db.session.query(Words)
+            .filter(Words.word == word, Words.deleted_at.is_(None))
+            .first()
+        )
         if existing:
-            return jsonify(
-                {
-                    "code": 500,
-                    "msg": "单词已存在",
-                }
-            )
+            return {"code": 400, "msg": "单词已存在"}
 
-        # 插入新单词
         word_type_str = (
             ",".join(word_type) if isinstance(word_type, list) else word_type
         )
@@ -63,49 +51,23 @@ def add():
             "mastered": mastered,
         }
         Words.insert(word_data)
-
-        return jsonify(
-            {
-                "code": 200,
-                "msg": "success",
-            }
-        )
+        return {"code": 200, "msg": "success"}
     except Exception as e:
-        db.session.rollback()
-        return jsonify(
-            {
-                "code": 500,
-                "msg": str(e),
-            }
-        )
+        return unexpected_error_response(e, db.session)
 
 
-def delete():
+def delete(data: dict):
     """删除单词"""
-    data = request.get_json()
     word_id = data.get("id")
-
     try:
         Words.delete(word_id)
-        return jsonify(
-            {
-                "code": 200,
-                "msg": "success",
-            }
-        )
+        return {"code": 200, "msg": "success"}
     except Exception as e:
-        db.session.rollback()
-        return jsonify(
-            {
-                "code": 500,
-                "msg": str(e),
-            }
-        )
+        return unexpected_error_response(e, db.session)
 
 
-def update():
+def update(data: dict):
     """更新单词"""
-    data = request.get_json()
     word = data.get("word")
     word_type = data.get("type")
     meaning = data.get("meaning")
@@ -138,44 +100,27 @@ def update():
             "mastered": mastered,
         }
         Words.update(word_data)
-
-        return jsonify(
-            {
-                "code": 200,
-                "msg": "success",
-            }
-        )
+        return {"code": 200, "msg": "success"}
     except Exception as e:
-        db.session.rollback()
-        return jsonify(
-            {
-                "code": 500,
-                "msg": str(e),
-            }
-        )
+        return unexpected_error_response(e, db.session)
 
 
-def list_words():
+def list_words(data: dict | None = None):
     """查询单词列表"""
-    data = request.get_json() if request.is_json else {}
+    data = data or {}
     page = data.get("page", 1)
     size = data.get("size", 10)
     query = data.get("query")
 
     try:
-        # 构建查询条件
         criterion = {}
         if query:
             for key, value in query.items():
                 if value:
                     criterion[key] = {"type": "like", "value": value}
 
-        # 获取总数
         total = Words.count(criterion)
-
-        # 获取分页数据
         offset = (page - 1) * size
-        # 只查询实际存在的字段，避免查询不存在的 create_at、update_at、deleted_at
         words_list = (
             Words.builder_query(criterion)
             .with_entities(
@@ -197,7 +142,6 @@ def list_words():
             .all()
         )
 
-        # 处理数据（with_entities 返回元组）
         data_list = []
         for item in words_list:
             data_list.append(
@@ -217,20 +161,9 @@ def list_words():
                 }
             )
 
-        return jsonify(
-            {
-                "code": 200,
-                "data": {
-                    "data": data_list,
-                    "total": total,
-                    "page": page,
-                },
-            }
-        )
+        return {
+            "code": 200,
+            "data": {"data": data_list, "total": total, "page": page},
+        }
     except Exception as e:
-        return jsonify(
-            {
-                "code": 500,
-                "msg": str(e),
-            }
-        )
+        return unexpected_error_response(e, db.session)
