@@ -22,3 +22,11 @@ DB_EN_CONFIG = DB_BASE_CONFIG | {
 DB_PDD_CONFIG = DB_BASE_CONFIG | {
     "database": "pdd_report",
 }
+
+DB_CHESS_CONFIG = DB_BASE_CONFIG | {
+    "host": os.environ.get("CHESS_DB_HOST", DB_BASE_CONFIG["host"]),
+    "user": os.environ.get("CHESS_DB_USER", DB_BASE_CONFIG["user"]),
+    "password": os.environ.get("CHESS_DB_PASSWORD", DB_BASE_CONFIG["password"]),
+    "port": int(os.environ.get("CHESS_DB_PORT", DB_BASE_CONFIG["port"])),
+    "database": os.environ.get("CHESS_DB_DATABASE", "chess"),
+}

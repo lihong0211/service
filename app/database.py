@@ -10,7 +10,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, declarative_base, sessionmaker
 
-from config.db import DB_EN_CONFIG, DB_PDD_CONFIG
+from config.db import DB_CHESS_CONFIG, DB_EN_CONFIG, DB_PDD_CONFIG
 
 Base = declarative_base()
 
@@ -24,6 +24,12 @@ _pdd_mysql_url = (
     f"mysql+pymysql://{DB_PDD_CONFIG['user']}:{DB_PDD_CONFIG['password']}"
     f"@{DB_PDD_CONFIG['host']}:{DB_PDD_CONFIG['port']}/{DB_PDD_CONFIG['database']}"
     f"?charset={DB_PDD_CONFIG.get('charset', 'utf8mb4')}"
+)
+
+_chess_mysql_url = (
+    f"mysql+pymysql://{DB_CHESS_CONFIG['user']}:{DB_CHESS_CONFIG['password']}"
+    f"@{DB_CHESS_CONFIG['host']}:{DB_CHESS_CONFIG['port']}/{DB_CHESS_CONFIG['database']}"
+    f"?charset={DB_CHESS_CONFIG.get('charset', 'utf8mb4')}"
 )
 
 engine_en: Engine = create_engine(
@@ -46,7 +52,17 @@ engine_pdd: Engine = create_engine(
     echo=False,
 )
 
-engines: dict[str, Engine] = {"en": engine_en, "pdd": engine_pdd}
+engine_chess: Engine = create_engine(
+    _chess_mysql_url,
+    pool_size=50,
+    max_overflow=200,
+    pool_recycle=3600,
+    pool_timeout=30,
+    pool_pre_ping=True,
+    echo=False,
+)
+
+engines: dict[str, Engine] = {"en": engine_en, "pdd": engine_pdd, "chess": engine_chess}
 
 
 class _RoutingSession(Session):
@@ -55,6 +71,8 @@ class _RoutingSession(Session):
             bind_key = getattr(mapper.class_, "__bind_key__", None)
             if bind_key == "pdd":
                 return engine_pdd
+            if bind_key == "chess":
+                return engine_chess
         return engine_en
 
 
