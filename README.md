@@ -30,3 +30,9 @@ uvicorn app.app:app --host 0.0.0.0 --port ${PORT:-3000} --workers 4
 ```
 
 或先 `export PORT=3000` 再执行上述命令。
+
+也可以直接用 `scripts/start.sh`：先 `fuser -k` 释放端口上的旧进程，再以 `nohup` 后台启动 uvicorn，日志输出到项目根目录的 `nohup.out`：
+
+```bash
+./scripts/start.sh
+```
