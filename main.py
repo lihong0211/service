@@ -5,17 +5,15 @@
 """
 import os
 import sys
+import uvicorn
 
 project_root = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, project_root)
 
 if __name__ == "__main__":
-    import uvicorn
-
-    port = int(os.environ.get("PORT", 3000))
     uvicorn.run(
         "app.app:app",
         host="0.0.0.0",
-        port=port,
+        port=3000,
         reload=True,
     )

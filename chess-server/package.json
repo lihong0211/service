@@ -1,0 +1,28 @@
+{
+  "name": "@llm-apps-sop/chess-server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "check": "pnpm typecheck && pnpm test:run && pnpm build"
+  },
+  "dependencies": {
+    "express": "^5.2.1",
+    "xiangqi.js": "github:lengyanyu258/xiangqi.js#f9019ac2303d4b80ef0b82fd0515bfb55a80a62b",
+    "ws": "^8.18.3"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^24.10.3",
+    "@types/ws": "^8.18.1",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "vitest": "4.1.6"
+  }
+}

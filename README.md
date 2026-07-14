@@ -7,7 +7,7 @@
 - **English 库**：`DB_HOST`、`DB_USER`、`DB_PASSWORD`、`DB_DATABASE`（缺省 localhost / english）
 - **PDD 库**：`PDD_DB_*`（缺省同主机、库名 `pdd_report`）
 
-`config/db.py` 会在导入时自动加载 `.env`。
+`config/db.py` 会在导入时自动加载 `.env`。密码勿写入仓库：复制 `.env.example` 为 `.env` 后本地填写 `DB_PASSWORD`。
 
 ## 安装依赖
 
