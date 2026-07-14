@@ -149,12 +149,6 @@ def decode_fen(fen: str):
     return board, turn
 
 
-def _status_after(board: list, turn: Color) -> GameStatus:
-    # Interim stub: Task 5 replaces this with real check/checkmate/stalemate/draw
-    # detection. Until then every position reports "playing".
-    return "playing"
-
-
 def _in_bounds(row: int, col: int) -> bool:
     return 0 <= row < BOARD_ROWS and 0 <= col < BOARD_COLS
 
@@ -304,8 +298,135 @@ def _pseudo_moves_for(board, pos: Position) -> list:
     return _PSEUDO_MOVE_GENERATORS[piece.type](board, pos, piece.color)
 
 
+def _king_position(board, color: Color):
+    for row in range(BOARD_ROWS):
+        for col in range(BOARD_COLS):
+            piece = board[row][col]
+            if piece is not None and piece.color == color and piece.type == "king":
+                return Position(row=row, col=col)
+    return None
+
+
+def _kings_face_each_other(board) -> bool:
+    black_king = _king_position(board, "black")
+    red_king = _king_position(board, "red")
+    if black_king is None or red_king is None:
+        return False
+    if black_king.col != red_king.col:
+        return False
+    col = black_king.col
+    for row in range(black_king.row + 1, red_king.row):
+        if board[row][col] is not None:
+            return False
+    return True
+
+
+def _is_in_check(board, color: Color) -> bool:
+    king_pos = _king_position(board, color)
+    if king_pos is None:
+        return False
+    opponent: Color = "black" if color == "red" else "red"
+    for row in range(BOARD_ROWS):
+        for col in range(BOARD_COLS):
+            piece = board[row][col]
+            if piece is not None and piece.color == opponent:
+                if king_pos in _pseudo_moves_for(board, Position(row=row, col=col)):
+                    return True
+    return _kings_face_each_other(board)
+
+
+def _apply_pseudo_move(board, from_pos: Position, to_pos: Position):
+    new_board = [row[:] for row in board]
+    new_board[to_pos.row][to_pos.col] = new_board[from_pos.row][from_pos.col]
+    new_board[from_pos.row][from_pos.col] = None
+    return new_board
+
+
+def legal_moves_for(board, pos: Position) -> list:
+    piece = board[pos.row][pos.col]
+    if piece is None:
+        return []
+    legal = []
+    for candidate in _pseudo_moves_for(board, pos):
+        simulated = _apply_pseudo_move(board, pos, candidate)
+        if not _is_in_check(simulated, piece.color):
+            legal.append(candidate)
+    return legal
+
+
+def all_legal_moves(board, color: Color) -> list:
+    moves = []
+    for row in range(BOARD_ROWS):
+        for col in range(BOARD_COLS):
+            piece = board[row][col]
+            if piece is not None and piece.color == color:
+                origin = Position(row=row, col=col)
+                for target in legal_moves_for(board, origin):
+                    moves.append((origin, target))
+    return moves
+
+
+# Draw detection only covers the bare-kings endgame. Perpetual-check/perpetual-chase
+# repetition rules (as implemented by xiangqi.js) are not reimplemented here.
+def _is_bare_kings(board) -> bool:
+    for row in board:
+        for piece in row:
+            if piece is not None and piece.type != "king":
+                return False
+    return True
+
+
+def _status_after(board: list, turn: Color) -> GameStatus:
+    if _is_bare_kings(board):
+        return "draw"
+    in_check = _is_in_check(board, turn)
+    has_moves = bool(all_legal_moves(board, turn))
+    if in_check and not has_moves:
+        return "checkmate"
+    if in_check:
+        return "check"
+    if not has_moves:
+        return "stalemate"
+    return "playing"
+
+
+def _move_piece(board, from_pos: Position, to_pos: Position, color: Color):
+    piece = board[from_pos.row][from_pos.col]
+    if piece is None or piece.color != color:
+        return None
+    if to_pos not in legal_moves_for(board, from_pos):
+        return None
+    captured_piece = board[to_pos.row][to_pos.col]
+    board[to_pos.row][to_pos.col] = piece
+    board[from_pos.row][from_pos.col] = None
+    return MoveResult(
+        color=color,
+        from_=from_pos,
+        to=to_pos,
+        piece=piece.type,
+        captured=captured_piece.type if captured_piece else None,
+        iccs=f"{position_to_iccs(from_pos)}{position_to_iccs(to_pos)}",
+    )
+
+
 def create_initial_snapshot() -> GameSnapshot:
     board = initial_board()
     turn: Color = "red"
     fen = encode_fen(board, turn)
     return GameSnapshot(board=board, turn=turn, status=_status_after(board, turn), history=[], fen=fen)
+
+
+def apply_move_to_fen(fen: str, from_pos: Position, to_pos: Position):
+    board, turn = decode_fen(fen)
+    move_result = _move_piece(board, from_pos, to_pos, turn)
+    if move_result is None:
+        return None
+    next_turn: Color = "black" if turn == "red" else "red"
+    new_fen = encode_fen(board, next_turn)
+    return GameSnapshot(
+        board=board,
+        turn=next_turn,
+        status=_status_after(board, next_turn),
+        history=[move_result],
+        fen=new_fen,
+    )

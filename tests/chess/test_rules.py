@@ -116,3 +116,64 @@ def test_chariot_stops_at_first_blocker():
     moves = set(rules._pseudo_moves_for(board, rules.Position(6, 2)))
     assert rules.Position(6, 5) in moves
     assert rules.Position(6, 6) not in moves
+
+
+def test_flying_general_rule_forbids_exposing_move():
+    board = rules.board_from_rows([
+        "....k....", ".........", ".........", ".........", "....p....",
+        ".........", ".........", ".........", ".........", "....K....",
+    ])
+    moves = set(rules.legal_moves_for(board, rules.Position(4, 4)))
+    assert rules.Position(4, 3) not in moves
+    assert rules.Position(4, 5) not in moves
+
+
+def test_checkmate_detection():
+    board = rules.board_from_rows([
+        "R...k....",
+        ".........",
+        "....R....",
+        ".........",
+        ".........",
+        ".........",
+        ".........",
+        ".........",
+        ".........",
+        "....K....",
+    ])
+    assert rules.all_legal_moves(board, "black") == []
+    assert rules._status_after(board, "black") == "checkmate"
+
+
+def test_stalemate_detection():
+    board = rules.board_from_rows([
+        "...k.....",
+        "R........",
+        "....R....",
+        ".........",
+        ".........",
+        ".........",
+        ".........",
+        ".........",
+        ".........",
+        "....K....",
+    ])
+    assert not rules._is_in_check(board, "black")
+    assert rules.all_legal_moves(board, "black") == []
+    assert rules._status_after(board, "black") == "stalemate"
+
+
+def test_apply_move_to_fen_accepts_legal_move():
+    initial_fen = rules.encode_fen(rules.initial_board(), "red")
+    snapshot = rules.apply_move_to_fen(initial_fen, rules.Position(6, 0), rules.Position(5, 0))
+
+    assert snapshot is not None
+    assert snapshot.turn == "black"
+    assert snapshot.history[0].iccs == "a3a4"
+
+
+def test_apply_move_to_fen_rejects_illegal_move():
+    initial_fen = rules.encode_fen(rules.initial_board(), "red")
+    snapshot = rules.apply_move_to_fen(initial_fen, rules.Position(6, 0), rules.Position(3, 0))
+
+    assert snapshot is None
