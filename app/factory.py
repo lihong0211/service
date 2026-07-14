@@ -1,14 +1,13 @@
 # app/factory.py
 """
-应用工厂：路由、异常处理、CORS、请求日志；DB 通过路由级 Depends(get_db) 绑定请求 session。
+应用工厂：路由、异常处理、请求日志；DB 通过路由级 Depends(get_db) 绑定请求 session。
+CORS 统一由 nginx 处理（deploy/nginx/nginx.conf），app 层不再重复添加。
 """
 import logging
-import os
 import time
 
 from fastapi import Depends, FastAPI, Request
 from fastapi.exceptions import HTTPException, RequestValidationError
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.database import get_db
@@ -78,17 +77,6 @@ def create_app() -> FastAPI:
         title="service-ali",
         description="API 服务",
     )
-
-    cors_origin = os.environ.get("CORS_ORIGIN", "*")
-    cors_in_app = os.environ.get("FLASK_ENV") != "production"
-    if cors_in_app:
-        app.add_middleware(
-            CORSMiddleware,
-            allow_origins=[cors_origin] if cors_origin != "*" else ["*"],
-            allow_credentials=True,
-            allow_methods=["GET", "POST", "OPTIONS", "PUT", "DELETE", "PATCH"],
-            allow_headers=["Content-Type", "Authorization"],
-        )
 
     register_exception_handlers(app)
 
