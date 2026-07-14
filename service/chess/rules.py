@@ -155,6 +155,155 @@ def _status_after(board: list, turn: Color) -> GameStatus:
     return "playing"
 
 
+def _in_bounds(row: int, col: int) -> bool:
+    return 0 <= row < BOARD_ROWS and 0 <= col < BOARD_COLS
+
+
+def _in_palace(row: int, col: int, color: Color) -> bool:
+    if col not in PALACE_COLS:
+        return False
+    return row in BLACK_PALACE_ROWS if color == "black" else row in RED_PALACE_ROWS
+
+
+def _on_own_side(row: int, color: Color) -> bool:
+    return row <= 4 if color == "black" else row >= 5
+
+
+def _king_moves(board, pos: Position, color: Color) -> list:
+    moves = []
+    for d_row, d_col in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+        row, col = pos.row + d_row, pos.col + d_col
+        if _in_bounds(row, col) and _in_palace(row, col, color):
+            target = board[row][col]
+            if target is None or target.color != color:
+                moves.append(Position(row=row, col=col))
+    return moves
+
+
+def _advisor_moves(board, pos: Position, color: Color) -> list:
+    moves = []
+    for d_row, d_col in [(-1, -1), (-1, 1), (1, -1), (1, 1)]:
+        row, col = pos.row + d_row, pos.col + d_col
+        if _in_bounds(row, col) and _in_palace(row, col, color):
+            target = board[row][col]
+            if target is None or target.color != color:
+                moves.append(Position(row=row, col=col))
+    return moves
+
+
+def _elephant_moves(board, pos: Position, color: Color) -> list:
+    moves = []
+    for d_row, d_col in [(-2, -2), (-2, 2), (2, -2), (2, 2)]:
+        row, col = pos.row + d_row, pos.col + d_col
+        eye_row, eye_col = pos.row + d_row // 2, pos.col + d_col // 2
+        if not _in_bounds(row, col) or not _on_own_side(row, color):
+            continue
+        if board[eye_row][eye_col] is not None:
+            continue
+        target = board[row][col]
+        if target is None or target.color != color:
+            moves.append(Position(row=row, col=col))
+    return moves
+
+
+def _horse_moves(board, pos: Position, color: Color) -> list:
+    moves = []
+    steps = [
+        (-2, -1, -1, 0), (-2, 1, -1, 0),
+        (2, -1, 1, 0), (2, 1, 1, 0),
+        (-1, -2, 0, -1), (1, -2, 0, -1),
+        (-1, 2, 0, 1), (1, 2, 0, 1),
+    ]
+    for d_row, d_col, leg_row, leg_col in steps:
+        row, col = pos.row + d_row, pos.col + d_col
+        leg_r, leg_c = pos.row + leg_row, pos.col + leg_col
+        if not _in_bounds(row, col):
+            continue
+        if board[leg_r][leg_c] is not None:
+            continue
+        target = board[row][col]
+        if target is None or target.color != color:
+            moves.append(Position(row=row, col=col))
+    return moves
+
+
+def _sliding_moves(board, pos: Position, color: Color, directions) -> list:
+    moves = []
+    for d_row, d_col in directions:
+        row, col = pos.row + d_row, pos.col + d_col
+        while _in_bounds(row, col):
+            target = board[row][col]
+            if target is None:
+                moves.append(Position(row=row, col=col))
+            else:
+                if target.color != color:
+                    moves.append(Position(row=row, col=col))
+                break
+            row += d_row
+            col += d_col
+    return moves
+
+
+def _chariot_moves(board, pos: Position, color: Color) -> list:
+    return _sliding_moves(board, pos, color, [(-1, 0), (1, 0), (0, -1), (0, 1)])
+
+
+def _cannon_moves(board, pos: Position, color: Color) -> list:
+    moves = []
+    for d_row, d_col in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+        row, col = pos.row + d_row, pos.col + d_col
+        screen_found = False
+        while _in_bounds(row, col):
+            target = board[row][col]
+            if not screen_found:
+                if target is None:
+                    moves.append(Position(row=row, col=col))
+                else:
+                    screen_found = True
+            else:
+                if target is not None:
+                    if target.color != color:
+                        moves.append(Position(row=row, col=col))
+                    break
+            row += d_row
+            col += d_col
+    return moves
+
+
+def _soldier_moves(board, pos: Position, color: Color) -> list:
+    moves = []
+    forward = 1 if color == "black" else -1
+    crossed = pos.row >= 5 if color == "black" else pos.row <= 4
+    candidates = [(forward, 0)]
+    if crossed:
+        candidates += [(0, -1), (0, 1)]
+    for d_row, d_col in candidates:
+        row, col = pos.row + d_row, pos.col + d_col
+        if _in_bounds(row, col):
+            target = board[row][col]
+            if target is None or target.color != color:
+                moves.append(Position(row=row, col=col))
+    return moves
+
+
+_PSEUDO_MOVE_GENERATORS = {
+    "king": _king_moves,
+    "advisor": _advisor_moves,
+    "elephant": _elephant_moves,
+    "horse": _horse_moves,
+    "chariot": _chariot_moves,
+    "cannon": _cannon_moves,
+    "soldier": _soldier_moves,
+}
+
+
+def _pseudo_moves_for(board, pos: Position) -> list:
+    piece = board[pos.row][pos.col]
+    if piece is None:
+        return []
+    return _PSEUDO_MOVE_GENERATORS[piece.type](board, pos, piece.color)
+
+
 def create_initial_snapshot() -> GameSnapshot:
     board = initial_board()
     turn: Color = "red"
