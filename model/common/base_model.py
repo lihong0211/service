@@ -5,7 +5,7 @@
 from datetime import datetime
 from sqlalchemy import Column, DateTime
 from sqlalchemy.dialects.mysql import INTEGER
-from app.app import db
+from app.database import db
 
 
 def get_datetime_now():

@@ -4,7 +4,7 @@ Chess 匹配与对局服务：排队、建房、提交着法、轮询状态
 """
 from datetime import datetime
 
-from app.app import db
+from app.database import db
 from app.errors import unexpected_error_response
 from model.chess import ChessMove, ChessQueueEntry, ChessRoom
 from service.chess import rules

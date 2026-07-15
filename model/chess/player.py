@@ -4,7 +4,7 @@
 """
 from sqlalchemy import Column, String
 
-from app.app import Base
+from app.database import Base
 from model.common.base_model import BaseModel
 
 

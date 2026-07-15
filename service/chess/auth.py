@@ -7,7 +7,7 @@ import re
 import uuid
 from datetime import datetime, timedelta
 
-from app.app import db
+from app.database import db
 from app.errors import unexpected_error_response
 from model.chess import ChessPlayer, ChessSession
 

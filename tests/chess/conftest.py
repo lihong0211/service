@@ -5,12 +5,6 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-# Must fully import app.app before touching the bare `model` package: model/__init__.py
-# eagerly imports model.english, which imports app.app, which (via create_app()) imports
-# service.english.words, which imports model.english.words again. That only resolves if
-# app.app is already fully loaded first (true in production, where main.py imports it
-# before anything else) — otherwise it's a circular partial-init ImportError.
-import app.app  # noqa: F401
 from app.database import Base, clear_request_session, set_request_session
 from model.chess import ChessMove, ChessPlayer, ChessQueueEntry, ChessRoom, ChessSession
 
