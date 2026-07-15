@@ -38,6 +38,14 @@ def _fetch_wechat_openid(code: str) -> str:
     return data["openid"]
 
 
+def _sanitize_avatar_url(avatar_url: str | None) -> str | None:
+    """chooseAvatar 返回的可能是设备本地临时路径（wxfile://...），不是外网可访问的
+    正式图片地址；只接受看起来像真实 URL 的值，避免把无法访问的本地路径存进数据库。"""
+    if avatar_url and avatar_url.startswith(("http://", "https://")):
+        return avatar_url
+    return None
+
+
 def login_with_wechat_code(code: str, nickname: str | None = None, avatar_url: str | None = None) -> dict:
     """微信登录：code 换取稳定 openid；nickname/avatar_url 由客户端 wx.getUserProfile() 提供"""
     trimmed_code = (code or "").strip()
@@ -46,6 +54,8 @@ def login_with_wechat_code(code: str, nickname: str | None = None, avatar_url: s
 
     if not WECHAT_APP_ID or not WECHAT_APP_SECRET:
         return {"code": 500, "msg": "微信登录未配置：请设置 WECHAT_APP_ID / WECHAT_APP_SECRET"}
+
+    avatar_url = _sanitize_avatar_url(avatar_url)
 
     try:
         open_id = _fetch_wechat_openid(trimmed_code)

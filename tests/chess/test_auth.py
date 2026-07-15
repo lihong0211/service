@@ -53,6 +53,22 @@ def test_login_keeps_existing_nickname_when_not_resent(chess_db):
     assert second["data"]["player"]["nickname"] == "旧昵称"
 
 
+def test_login_stores_real_http_avatar_url(chess_db):
+    result = auth.login_with_wechat_code(
+        "wx-login-42", avatar_url="https://example.com/avatar.jpg"
+    )
+
+    assert result["data"]["player"]["avatar_url"] == "https://example.com/avatar.jpg"
+
+
+def test_login_ignores_local_device_avatar_path(chess_db):
+    result = auth.login_with_wechat_code(
+        "wx-login-1", avatar_url="wxfile://tmp_avatar123.jpg"
+    )
+
+    assert result["data"]["player"]["avatar_url"] is None
+
+
 def test_login_rejects_empty_code(chess_db):
     result = auth.login_with_wechat_code("   ")
 
