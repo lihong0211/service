@@ -40,7 +40,11 @@ def _authenticated_player_id(authorization: str | None):
 @router.post("/auth/wechat-login")
 async def route_wechat_login(request: Request):
     body = await _body(request)
-    return api_response(login_with_wechat_code(body.get("code", "")))
+    return api_response(login_with_wechat_code(
+        body.get("code", ""),
+        nickname=body.get("nickname"),
+        avatar_url=body.get("avatar_url"),
+    ))
 
 
 # ---------- 匹配 ----------

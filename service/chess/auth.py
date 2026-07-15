@@ -1,45 +1,71 @@
 # service/chess/auth.py
 """
-Chess 登录服务：mock 微信登录 + 会话签发/校验
+Chess 登录服务：微信登录（code2session 换取 openid）+ 会话签发/校验
 """
-import hashlib
-import re
 import uuid
 from datetime import datetime, timedelta
 
+import requests
+
 from app.database import db
 from app.errors import unexpected_error_response
+from config.wechat import WECHAT_APP_ID, WECHAT_APP_SECRET
 from model.chess import ChessPlayer, ChessSession
 
 SESSION_TTL = timedelta(days=7)
+WECHAT_SESSION_URL = "https://api.weixin.qq.com/sns/jscode2session"
 
 
-def _mock_open_id(code: str) -> str:
-    return f"mock_{code}"
+class WechatLoginError(Exception):
+    """微信 code2session 返回业务错误（如 code 无效/已使用）"""
 
 
-def _mock_nickname(code: str) -> str:
-    digest = hashlib.sha256(code.encode("utf-8")).hexdigest()
-    match = re.search(r"(\d+)$", code)
-    suffix = match.group(1) if match else str(int(digest[:4], 16) % 10000 or 1)
-    return f"棋友 {suffix}"
+def _fetch_wechat_openid(code: str) -> str:
+    response = requests.get(
+        WECHAT_SESSION_URL,
+        params={
+            "appid": WECHAT_APP_ID,
+            "secret": WECHAT_APP_SECRET,
+            "js_code": code,
+            "grant_type": "authorization_code",
+        },
+        timeout=5,
+    )
+    response.raise_for_status()
+    data = response.json()
+    if data.get("errcode"):
+        raise WechatLoginError(f"微信登录失败（{data['errcode']}）：{data.get('errmsg', '未知错误')}")
+    return data["openid"]
 
 
-def login_with_wechat_code(code: str) -> dict:
-    """mock 微信登录：同一 code 始终对应同一棋手，每次登录签发新会话"""
+def login_with_wechat_code(code: str, nickname: str | None = None, avatar_url: str | None = None) -> dict:
+    """微信登录：code 换取稳定 openid；nickname/avatar_url 由客户端 wx.getUserProfile() 提供"""
     trimmed_code = (code or "").strip()
     if not trimmed_code:
         return {"code": 400, "msg": "微信登录 code 不能为空"}
 
+    if not WECHAT_APP_ID or not WECHAT_APP_SECRET:
+        return {"code": 500, "msg": "微信登录未配置：请设置 WECHAT_APP_ID / WECHAT_APP_SECRET"}
+
     try:
-        open_id = _mock_open_id(trimmed_code)
+        open_id = _fetch_wechat_openid(trimmed_code)
+
         player = ChessPlayer.select_one_by({"open_id": open_id})
         if player is None:
             player_id = ChessPlayer.insert({
                 "open_id": open_id,
-                "nickname": _mock_nickname(trimmed_code),
+                "nickname": nickname or "微信用户",
+                "avatar_url": avatar_url,
             })
             player = ChessPlayer.get_by_id(player_id)
+        elif nickname or avatar_url:
+            update_data = {"id": player.id}
+            if nickname:
+                update_data["nickname"] = nickname
+            if avatar_url:
+                update_data["avatar_url"] = avatar_url
+            ChessPlayer.update(update_data)
+            player = ChessPlayer.get_by_id(player.id)
 
         expires_at = datetime.now() + SESSION_TTL
         token = str(uuid.uuid4())
@@ -64,6 +90,10 @@ def login_with_wechat_code(code: str) -> dict:
                 },
             },
         }
+    except WechatLoginError as e:
+        return {"code": 400, "msg": str(e)}
+    except requests.RequestException:
+        return {"code": 502, "msg": "微信服务暂不可用，请稍后重试"}
     except Exception as e:
         return unexpected_error_response(e, db.session)
 
