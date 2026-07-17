@@ -30,3 +30,8 @@ DB_CHESS_CONFIG = DB_BASE_CONFIG | {
     "port": int(os.environ.get("CHESS_DB_PORT", DB_BASE_CONFIG["port"])),
     "database": os.environ.get("CHESS_DB_DATABASE", "chess"),
 }
+
+# 记单词桌面客户端（en-desktop 模块）：沿用桌面端原后端的 english_new 库
+DB_EN_DESKTOP_CONFIG = DB_BASE_CONFIG | {
+    "database": os.environ.get("EN_DESKTOP_DB_DATABASE", "english_new"),
+}

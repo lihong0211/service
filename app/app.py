@@ -14,6 +14,7 @@ from app.database import (
     SessionLocal,
     db,
     engine_en,
+    engine_en_desktop,
     engine_pdd,
     engines,
     get_db,
@@ -29,6 +30,7 @@ __all__ = [
     "Base",
     "SessionLocal",
     "engine_en",
+    "engine_en_desktop",
     "engine_pdd",
     "engines",
 ]

@@ -11,3 +11,7 @@ load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 WECHAT_APP_ID = os.environ.get("WECHAT_APP_ID", "")
 WECHAT_APP_SECRET = os.environ.get("WECHAT_APP_SECRET", "")
+
+# en-desktop 模块：微信开放平台"网站应用"（扫码登录），与上面小程序的凭据是两套
+EN_DESKTOP_WECHAT_APP_ID = os.environ.get("EN_DESKTOP_WECHAT_APP_ID", "")
+EN_DESKTOP_WECHAT_APP_SECRET = os.environ.get("EN_DESKTOP_WECHAT_APP_SECRET", "")
