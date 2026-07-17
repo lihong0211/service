@@ -1,13 +1,14 @@
 # app/factory.py
 """
 应用工厂：路由、异常处理、请求日志；DB 通过路由级 Depends(get_db) 绑定请求 session。
+CORS 统一由 nginx 处理，app 层不重复加——两边都加会导致响应头里
+Access-Control-Allow-Origin 出现两次，浏览器判定非法直接拒绝请求。
 """
 import logging
 import time
 
 from fastapi import Depends, FastAPI, Request
 from fastapi.exceptions import HTTPException, RequestValidationError
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.database import get_db
@@ -79,16 +80,6 @@ def create_app() -> FastAPI:
     )
 
     register_exception_handlers(app)
-
-    # Electron 桌面客户端打包后是 file:// 页面直连本服务（IP:port，暂无域名/nginx），
-    # 属于真跨域请求；认证走 Bearer token 不用 cookie，允许全部来源没有 CSRF 风险
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=False,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
 
     from routes import api_router
 
