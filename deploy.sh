@@ -50,6 +50,8 @@ export GIT_SSH_COMMAND="ssh -o BatchMode=yes -o ConnectTimeout=15"
 cd "${DEPLOY_PATH}"
 echo "==> git pull"
 git pull
+echo "==> 安装依赖（requirements.txt 有变化才会真正装东西，没变化几秒内跳过）"
+python3 -m pip install -q -r requirements.txt
 echo "==> 执行 start.sh"
 bash start.sh
 REMOTE_SCRIPT
