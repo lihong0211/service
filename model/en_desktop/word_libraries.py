@@ -34,3 +34,12 @@ class EnDesktopWordLibraryItem(BaseEnDesktop, EnDesktopModel):
         Integer, ForeignKey("word_libraries.id", ondelete="CASCADE"), nullable=False
     )
     word_id = Column(Integer, ForeignKey("words.id", ondelete="CASCADE"), nullable=False)
+
+
+class EnDesktopWordLibraryFavorite(BaseEnDesktop, EnDesktopModel):
+    __tablename__ = "word_library_favorites"
+
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    word_library_id = Column(
+        Integer, ForeignKey("word_libraries.id", ondelete="CASCADE"), nullable=False
+    )

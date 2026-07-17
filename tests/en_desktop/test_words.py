@@ -49,9 +49,10 @@ def test_list_words_pagination(en_desktop_db):
     page1 = words.list_words(page=1, page_size=10)
     page2 = words.list_words(page=2, page_size=10)
     assert page1["code"] == 200
-    assert len(page1["data"]) == 10
-    assert len(page2["data"]) == 5
-    assert page1["data"][0]["meaning"]
+    assert len(page1["data"]["list"]) == 10
+    assert page1["data"]["total"] == 15
+    assert len(page2["data"]["list"]) == 5
+    assert page1["data"]["list"][0]["meaning"]
 
 
 def test_update_word_replaces_meanings(en_desktop_db):

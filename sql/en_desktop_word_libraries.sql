@@ -3,6 +3,9 @@
 -- 注：word_library_items 比 en-elctron 仓库 schema.sql 的预留版本多一列 updated_at，
 --     与 en-desktop 模块基础模型的字段约定保持一致。
 
+-- 音标列加宽：ECDICT 多读音音标超过原 varchar(20)
+ALTER TABLE words MODIFY en_pronunciation VARCHAR(64), MODIFY us_pronunciation VARCHAR(64);
+
 CREATE TABLE IF NOT EXISTS word_libraries (
   id          INT AUTO_INCREMENT PRIMARY KEY,
   user_id     INT NOT NULL COMMENT '词库归属用户',
@@ -14,6 +17,18 @@ CREATE TABLE IF NOT EXISTS word_libraries (
   deleted_at  DATETIME     NULL COMMENT '软删除时间',
   CONSTRAINT fk_word_libraries_user_id FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='个人词库（类似歌单）';
+
+CREATE TABLE IF NOT EXISTS word_library_favorites (
+  id               INT AUTO_INCREMENT PRIMARY KEY,
+  user_id          INT NOT NULL COMMENT '收藏人',
+  word_library_id  INT NOT NULL COMMENT '被收藏的（公共）词库',
+  created_at       DATETIME     DEFAULT CURRENT_TIMESTAMP,
+  updated_at       DATETIME     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  deleted_at       DATETIME     NULL COMMENT '软删除时间（取消收藏）',
+  UNIQUE KEY uk_user_library (user_id, word_library_id),
+  CONSTRAINT fk_wlf_user_id FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  CONSTRAINT fk_wlf_library_id FOREIGN KEY (word_library_id) REFERENCES word_libraries(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户收藏的词库';
 
 CREATE TABLE IF NOT EXISTS word_library_items (
   id               INT AUTO_INCREMENT PRIMARY KEY,

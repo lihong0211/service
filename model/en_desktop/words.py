@@ -11,8 +11,8 @@ class EnDesktopWord(BaseEnDesktop, EnDesktopModel):
     __tablename__ = "words"
 
     word = Column(String(30), unique=True, index=True, nullable=False)
-    en_pronunciation = Column(String(30), nullable=True)
-    us_pronunciation = Column(String(30), nullable=True)
+    en_pronunciation = Column(String(64), nullable=True)
+    us_pronunciation = Column(String(64), nullable=True)
 
     def to_dict(self, meaning: list | None = None) -> dict:
         return {

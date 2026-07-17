@@ -1,7 +1,7 @@
 # service/en_desktop/libraries.py
 """
 en-desktop 词库服务（歌单式）：词库 CRUD + 词库内单词管理。
-所有操作按 user_id 隔离；"我的收藏"是每个用户的默认词库，自动创建、不可改名/删除。
+所有操作按 user_id 隔离；"默认收藏"是每个用户的默认词库，自动创建、不可改名/删除。
 """
 from datetime import datetime
 
@@ -10,22 +10,33 @@ from app.errors import unexpected_error_response
 from model.en_desktop import (
     EnDesktopWord,
     EnDesktopWordLibrary,
+    EnDesktopWordLibraryFavorite,
     EnDesktopWordLibraryItem,
     EnDesktopWordMeaning,
 )
 
-DEFAULT_LIBRARY_NAME = "我的收藏"
+DEFAULT_LIBRARY_NAME = "默认收藏"
+REVIEW_LIBRARY_NAME = "未掌握"
+# 系统默认词库（自动创建、不可改名/删除）：默认收藏=划词收藏入口，未掌握=复习清单
+PROTECTED_LIBRARY_NAMES = (DEFAULT_LIBRARY_NAME, REVIEW_LIBRARY_NAME)
+
+
+def _ensure_named_library(user_id: int, name: str) -> EnDesktopWordLibrary:
+    lib = EnDesktopWordLibrary.select_one_by({"user_id": user_id, "name": name})
+    if lib:
+        return lib
+    lib_id = EnDesktopWordLibrary.insert({"user_id": user_id, "name": name})
+    return EnDesktopWordLibrary.get_by_id(lib_id)
 
 
 def ensure_default_library(user_id: int) -> EnDesktopWordLibrary:
-    """默认词库不存在则创建"""
-    lib = EnDesktopWordLibrary.select_one_by(
-        {"user_id": user_id, "name": DEFAULT_LIBRARY_NAME}
-    )
-    if lib:
-        return lib
-    lib_id = EnDesktopWordLibrary.insert({"user_id": user_id, "name": DEFAULT_LIBRARY_NAME})
-    return EnDesktopWordLibrary.get_by_id(lib_id)
+    """划词收藏的默认词库，不存在则创建"""
+    return _ensure_named_library(user_id, DEFAULT_LIBRARY_NAME)
+
+
+def ensure_review_library(user_id: int) -> EnDesktopWordLibrary:
+    """未掌握（复习）词库，不存在则创建"""
+    return _ensure_named_library(user_id, REVIEW_LIBRARY_NAME)
 
 
 def owned_library(user_id: int, library_id: int) -> EnDesktopWordLibrary | None:
@@ -33,6 +44,25 @@ def owned_library(user_id: int, library_id: int) -> EnDesktopWordLibrary | None:
     if not lib or lib.user_id != user_id:
         return None
     return lib
+
+
+def _meanings_grouped(word_ids: list) -> dict:
+    """word_id -> [{type, content}]，一次查询代替逐词查询"""
+    grouped = {}
+    if not word_ids:
+        return grouped
+    rows = (
+        db.session.query(EnDesktopWordMeaning)
+        .where(
+            EnDesktopWordMeaning.word_id.in_(word_ids),
+            EnDesktopWordMeaning.deleted_at.is_(None),
+        )
+        .order_by(EnDesktopWordMeaning.id.asc())
+        .all()
+    )
+    for m in rows:
+        grouped.setdefault(m.word_id, []).append({"type": m.type, "content": m.content})
+    return grouped
 
 
 def _word_count(library_id: int) -> int:
@@ -49,12 +79,100 @@ def _word_count(library_id: int) -> int:
 def list_libraries(user_id: int) -> dict:
     try:
         ensure_default_library(user_id)
+        ensure_review_library(user_id)
         libs = EnDesktopWordLibrary.select_by({"user_id": user_id})
         return {
             "code": 200,
             "msg": "success",
             "data": [lib.to_dict(word_count=_word_count(lib.id)) for lib in libs],
         }
+    except Exception as e:
+        return unexpected_error_response(e, db.session)
+
+
+def _favorited_ids(user_id: int) -> set:
+    favs = EnDesktopWordLibraryFavorite.select_by({"user_id": user_id})
+    return {f.word_library_id for f in favs}
+
+
+def list_public_libraries(user_id: int) -> dict:
+    """公共（系统）词库列表，任何登录用户可见；favorited 标记当前用户是否已收藏"""
+    try:
+        favorited = _favorited_ids(user_id)
+        libs = EnDesktopWordLibrary.select_by({"is_public": 1})
+        return {
+            "code": 200,
+            "msg": "success",
+            "data": [
+                {**lib.to_dict(word_count=_word_count(lib.id)), "favorited": lib.id in favorited}
+                for lib in libs
+            ],
+        }
+    except Exception as e:
+        return unexpected_error_response(e, db.session)
+
+
+def list_favorites(user_id: int) -> dict:
+    """当前用户收藏的公共词库"""
+    try:
+        favorited = _favorited_ids(user_id)
+        if not favorited:
+            return {"code": 200, "msg": "success", "data": []}
+        libs = (
+            db.session.query(EnDesktopWordLibrary)
+            .where(
+                EnDesktopWordLibrary.id.in_(favorited),
+                EnDesktopWordLibrary.deleted_at.is_(None),
+            )
+            .all()
+        )
+        return {
+            "code": 200,
+            "msg": "success",
+            "data": [
+                {**lib.to_dict(word_count=_word_count(lib.id)), "favorited": True}
+                for lib in libs
+            ],
+        }
+    except Exception as e:
+        return unexpected_error_response(e, db.session)
+
+
+def favorite_library(user_id: int, library_id: int) -> dict:
+    """收藏公共词库；曾取消过的恢复原纪录（绕开唯一键冲突）"""
+    try:
+        lib = EnDesktopWordLibrary.get_by_id(library_id)
+        if not lib or not lib.is_public:
+            return {"code": 400, "msg": "词库不存在或不可收藏"}
+
+        existing = (
+            db.session.query(EnDesktopWordLibraryFavorite)
+            .where(
+                EnDesktopWordLibraryFavorite.user_id == user_id,
+                EnDesktopWordLibraryFavorite.word_library_id == library_id,
+            )
+            .first()
+        )
+        if existing and existing.deleted_at is None:
+            return {"code": 200, "msg": "success", "data": None}
+        if existing:
+            existing.deleted_at = None
+        else:
+            db.session.add(
+                EnDesktopWordLibraryFavorite(user_id=user_id, word_library_id=library_id)
+            )
+        db.session.commit()
+        return {"code": 200, "msg": "success", "data": None}
+    except Exception as e:
+        return unexpected_error_response(e, db.session)
+
+
+def unfavorite_library(user_id: int, library_id: int) -> dict:
+    try:
+        EnDesktopWordLibraryFavorite.delete_by(
+            {"user_id": user_id, "word_library_id": library_id}
+        )
+        return {"code": 200, "msg": "success", "data": None}
     except Exception as e:
         return unexpected_error_response(e, db.session)
 
@@ -84,7 +202,7 @@ def update_library(user_id: int, library_id: int, data: dict) -> dict:
         lib = owned_library(user_id, library_id)
         if not lib:
             return {"code": 400, "msg": "词库不存在"}
-        if lib.name == DEFAULT_LIBRARY_NAME:
+        if lib.name in PROTECTED_LIBRARY_NAMES:
             return {"code": 400, "msg": "默认词库不能修改"}
 
         new_name = (data.get("name") or "").strip() if data.get("name") is not None else None
@@ -117,7 +235,7 @@ def delete_library(user_id: int, library_id: int) -> dict:
         lib = owned_library(user_id, library_id)
         if not lib:
             return {"code": 400, "msg": "词库不存在"}
-        if lib.name == DEFAULT_LIBRARY_NAME:
+        if lib.name in PROTECTED_LIBRARY_NAMES:
             return {"code": 400, "msg": "默认词库不能删除"}
 
         EnDesktopWordLibraryItem.delete_by({"word_library_id": library_id}, commit=False)
@@ -128,34 +246,53 @@ def delete_library(user_id: int, library_id: int) -> dict:
         return unexpected_error_response(e, db.session)
 
 
-def library_words(user_id: int, library_id: int, page: int = 1, page_size: int = 10) -> dict:
+def library_words(
+    user_id: int,
+    library_id: int,
+    page: int = 1,
+    page_size: int = 10,
+    search: str | None = None,
+) -> dict:
+    """分页返回 {list, total, page, page_size}；search 按单词模糊匹配"""
     try:
-        lib = owned_library(user_id, library_id)
-        if not lib:
+        # 自己的词库可读，公共词库任何登录用户可读；改/删仍只限属主
+        lib = EnDesktopWordLibrary.get_by_id(library_id)
+        if not lib or (lib.user_id != user_id and not lib.is_public):
             return {"code": 400, "msg": "词库不存在"}
 
-        items = (
-            db.session.query(EnDesktopWordLibraryItem)
+        query = (
+            db.session.query(EnDesktopWordLibraryItem, EnDesktopWord)
+            .join(EnDesktopWord, EnDesktopWord.id == EnDesktopWordLibraryItem.word_id)
             .where(
                 EnDesktopWordLibraryItem.word_library_id == library_id,
                 EnDesktopWordLibraryItem.deleted_at.is_(None),
+                EnDesktopWord.deleted_at.is_(None),
             )
-            .order_by(EnDesktopWordLibraryItem.id.asc())
+        )
+        if search:
+            query = query.where(EnDesktopWord.word.like(f"%{search.strip()}%"))
+        total = query.count()
+        rows = (
+            query.order_by(EnDesktopWordLibraryItem.id.asc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
             .all()
         )
-        start = (page - 1) * page_size
-        page_items = items[start : start + page_size]
 
-        data = []
-        for item in page_items:
-            word = EnDesktopWord.get_by_id(item.word_id)
-            if not word:
-                continue
-            meanings = EnDesktopWordMeaning.select_by({"word_id": word.id})
-            data.append(
-                word.to_dict(meaning=[{"type": m.type, "content": m.content} for m in meanings])
-            )
-        return {"code": 200, "msg": "success", "data": data}
+        page_words = [word for _, word in rows]
+        meanings_by_word = _meanings_grouped([w.id for w in page_words])
+        return {
+            "code": 200,
+            "msg": "success",
+            "data": {
+                "list": [
+                    w.to_dict(meaning=meanings_by_word.get(w.id, [])) for w in page_words
+                ],
+                "total": total,
+                "page": page,
+                "page_size": page_size,
+            },
+        }
     except Exception as e:
         return unexpected_error_response(e, db.session)
 

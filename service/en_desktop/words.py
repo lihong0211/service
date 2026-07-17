@@ -7,6 +7,7 @@ from app.errors import unexpected_error_response
 from model.en_desktop import EnDesktopWord, EnDesktopWordMeaning
 from service.en_desktop import dictionary
 from service.en_desktop import libraries as libraries_service
+from service.en_desktop.libraries import _meanings_grouped
 
 
 def _meanings_of(word_id: int) -> list:
@@ -28,15 +29,31 @@ def _replace_meanings(word_id: int, meaning: list) -> None:
         )
 
 
-def list_words(page: int = 1, page_size: int = 10) -> dict:
+def list_words(page: int = 1, page_size: int = 10, search: str | None = None) -> dict:
+    """分页返回 {list, total, page, page_size}；search 按单词模糊匹配"""
     try:
-        words = EnDesktopWord.select_by()
-        start = (page - 1) * page_size
-        end = start + page_size
+        query = db.session.query(EnDesktopWord).where(EnDesktopWord.deleted_at.is_(None))
+        if search:
+            query = query.where(EnDesktopWord.word.like(f"%{search.strip()}%"))
+        total = query.count()
+        page_words = (
+            query.order_by(EnDesktopWord.id.asc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+            .all()
+        )
+
+        # 批量取释义，避免几千词时的 N+1 查询
+        meanings_by_word = _meanings_grouped([w.id for w in page_words])
         return {
             "code": 200,
             "msg": "success",
-            "data": [_word_with_meanings(w) for w in words[start:end]],
+            "data": {
+                "list": [w.to_dict(meaning=meanings_by_word.get(w.id, [])) for w in page_words],
+                "total": total,
+                "page": page,
+                "page_size": page_size,
+            },
         }
     except Exception as e:
         return unexpected_error_response(e, db.session)
@@ -54,7 +71,7 @@ def get_word(word_id: int) -> dict:
 
 def add_word(data: dict, user_id: int | None = None) -> dict:
     """
-    创建单词。可选 library_id（数字 ID 或 "default"=我的收藏）：
+    创建单词。可选 library_id（数字 ID 或 "default"=默认收藏）：
     单词入全局表的同时加进该词库（已存在的单词只加词库，幂等），需要登录。
     不传 library_id 时行为与原桌面端后端一致。
     """

@@ -29,15 +29,15 @@ def _add_word(word_text="apple"):
     )["data"]["id"]
 
 
-def test_list_auto_creates_default_library(user_id):
+def test_list_auto_creates_default_libraries(user_id):
     result = libraries.list_libraries(user_id)
     assert result["code"] == 200
-    assert len(result["data"]) == 1
-    assert result["data"][0]["name"] == DEFAULT_LIBRARY_NAME
-    assert result["data"][0]["word_count"] == 0
+    names = [l["name"] for l in result["data"]]
+    assert names == [DEFAULT_LIBRARY_NAME, libraries.REVIEW_LIBRARY_NAME]
+    assert all(l["word_count"] == 0 for l in result["data"])
 
     # 再次 list 不会重复创建
-    assert len(libraries.list_libraries(user_id)["data"]) == 1
+    assert len(libraries.list_libraries(user_id)["data"]) == 2
 
 
 def test_add_rename_delete_library(user_id):
@@ -57,10 +57,10 @@ def test_add_rename_delete_library(user_id):
     assert "六级词汇" not in names
 
 
-def test_default_library_protected(user_id):
-    default = libraries.list_libraries(user_id)["data"][0]
-    assert libraries.update_library(user_id, default["id"], {"name": "x"})["code"] == 400
-    assert libraries.delete_library(user_id, default["id"])["code"] == 400
+def test_default_libraries_protected(user_id):
+    for lib in libraries.list_libraries(user_id)["data"]:
+        assert libraries.update_library(user_id, lib["id"], {"name": "x"})["code"] == 400
+        assert libraries.delete_library(user_id, lib["id"])["code"] == 400
 
 
 def test_library_ownership_isolation(user_id, other_user_id):
@@ -91,7 +91,7 @@ def test_add_remove_readd_word(user_id):
     )
 
     listed = libraries.library_words(user_id, lib_id)
-    assert [w["word"] for w in listed["data"]] == ["apple"]
+    assert [w["word"] for w in listed["data"]["list"]] == ["apple"]
 
     # 移出后再加回（软删恢复，不撞唯一键）
     assert (
@@ -100,19 +100,19 @@ def test_add_remove_readd_word(user_id):
         ]
         == 200
     )
-    assert libraries.library_words(user_id, lib_id)["data"] == []
+    assert libraries.library_words(user_id, lib_id)["data"]["list"] == []
     assert (
         libraries.add_word_to_library(user_id, {"library_id": lib_id, "word_id": word_id})["code"]
         == 200
     )
-    assert len(libraries.library_words(user_id, lib_id)["data"]) == 1
+    assert len(libraries.library_words(user_id, lib_id)["data"]["list"]) == 1
 
     counts = {l["id"]: l["word_count"] for l in libraries.list_libraries(user_id)["data"]}
     assert counts[lib_id] == 1
 
 
 def test_add_word_with_default_library(user_id):
-    """/words/add 带 library_id="default"：单词入库并进我的收藏"""
+    """/words/add 带 library_id="default"：单词入库并进默认收藏"""
     result = words.add_word(
         {
             "word": "banana",
@@ -163,6 +163,73 @@ def test_add_word_library_requires_auth(en_desktop_db):
         }
     )
     assert result["code"] == 401
+
+
+def test_public_library_visible_and_readable_by_others(user_id, other_user_id):
+    """公共词库：出现在 public 列表，任何用户可读词，但非属主不可改/删"""
+    from model.en_desktop import EnDesktopWordLibrary
+
+    lib_id = libraries.add_library(user_id, {"name": "系统四级"})["data"]["id"]
+    EnDesktopWordLibrary.update({"id": lib_id, "is_public": 1})
+    word_id = _add_word()
+    libraries.add_word_to_library(user_id, {"library_id": lib_id, "word_id": word_id})
+
+    public = libraries.list_public_libraries(other_user_id)
+    assert public["code"] == 200
+    entry = next(l for l in public["data"] if l["id"] == lib_id)
+    assert entry["word_count"] == 1
+    assert entry["favorited"] is False
+
+    # 其他用户可读公共词库的单词
+    listed = libraries.library_words(other_user_id, lib_id)
+    assert listed["code"] == 200
+    assert [w["word"] for w in listed["data"]["list"]] == ["apple"]
+
+    # 但不能改/删/往里加词
+    assert libraries.update_library(other_user_id, lib_id, {"name": "x"})["code"] == 400
+    assert libraries.delete_library(other_user_id, lib_id)["code"] == 400
+    assert (
+        libraries.add_word_to_library(other_user_id, {"library_id": lib_id, "word_id": word_id})[
+            "code"
+        ]
+        == 400
+    )
+
+
+def test_private_library_not_in_public_list_nor_readable(user_id, other_user_id):
+    lib_id = libraries.add_library(user_id, {"name": "私有库"})["data"]["id"]
+    assert all(l["id"] != lib_id for l in libraries.list_public_libraries(user_id)["data"])
+    assert libraries.library_words(other_user_id, lib_id)["code"] == 400
+
+
+def test_favorite_unfavorite_refavorite(user_id, other_user_id):
+    from model.en_desktop import EnDesktopWordLibrary
+
+    lib_id = libraries.add_library(user_id, {"name": "系统主题库"})["data"]["id"]
+    EnDesktopWordLibrary.update({"id": lib_id, "is_public": 1})
+
+    # 收藏 → favorites 列表出现，public 列表 favorited=True
+    assert libraries.favorite_library(other_user_id, lib_id)["code"] == 200
+    favs = libraries.list_favorites(other_user_id)
+    assert [l["id"] for l in favs["data"]] == [lib_id]
+    entry = next(l for l in libraries.list_public_libraries(other_user_id)["data"] if l["id"] == lib_id)
+    assert entry["favorited"] is True
+
+    # 重复收藏幂等
+    assert libraries.favorite_library(other_user_id, lib_id)["code"] == 200
+    assert len(libraries.list_favorites(other_user_id)["data"]) == 1
+
+    # 取消 → 再收藏（软删恢复，不撞唯一键）
+    assert libraries.unfavorite_library(other_user_id, lib_id)["code"] == 200
+    assert libraries.list_favorites(other_user_id)["data"] == []
+    assert libraries.favorite_library(other_user_id, lib_id)["code"] == 200
+    assert len(libraries.list_favorites(other_user_id)["data"]) == 1
+
+
+def test_favorite_private_library_rejected(user_id, other_user_id):
+    lib_id = libraries.add_library(user_id, {"name": "私有不可收藏"})["data"]["id"]
+    assert libraries.favorite_library(other_user_id, lib_id)["code"] == 400
+    assert libraries.favorite_library(other_user_id, None)["code"] == 400
 
 
 def test_delete_library_removes_items(user_id):

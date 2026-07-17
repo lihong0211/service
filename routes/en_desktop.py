@@ -105,8 +105,9 @@ async def route_users_activate(
 async def route_words_list(
     page: int = Query(1, description="页码，从1开始"),
     page_size: int = Query(10, description="每页记录数", le=10000),
+    search: str | None = Query(None, description="按单词模糊搜索"),
 ):
-    return _json_200(words_service.list_words(page, page_size))
+    return _json_200(words_service.list_words(page, page_size, search))
 
 
 @router.get("/words/{word_id}")
@@ -138,6 +139,40 @@ async def route_words_delete(word_id: int = Query(..., description="wordID")):
 
 
 # ---------- 词库（歌单式，全部需要登录） ----------
+@router.get("/libraries/public")
+async def route_libraries_public(authorization: str | None = Header(None)):
+    user_id = _current_user_id(authorization)
+    if user_id is None:
+        return _json_200(UNAUTHORIZED)
+    return _json_200(libraries_service.list_public_libraries(user_id))
+
+
+@router.get("/libraries/favorites")
+async def route_libraries_favorites(authorization: str | None = Header(None)):
+    user_id = _current_user_id(authorization)
+    if user_id is None:
+        return _json_200(UNAUTHORIZED)
+    return _json_200(libraries_service.list_favorites(user_id))
+
+
+@router.post("/libraries/favorite")
+async def route_libraries_favorite(request: Request, authorization: str | None = Header(None)):
+    user_id = _current_user_id(authorization)
+    if user_id is None:
+        return _json_200(UNAUTHORIZED)
+    body = await _body(request)
+    return _json_200(libraries_service.favorite_library(user_id, body.get("library_id")))
+
+
+@router.post("/libraries/unfavorite")
+async def route_libraries_unfavorite(request: Request, authorization: str | None = Header(None)):
+    user_id = _current_user_id(authorization)
+    if user_id is None:
+        return _json_200(UNAUTHORIZED)
+    body = await _body(request)
+    return _json_200(libraries_service.unfavorite_library(user_id, body.get("library_id")))
+
+
 @router.get("/libraries/list")
 async def route_libraries_list(authorization: str | None = Header(None)):
     user_id = _current_user_id(authorization)
@@ -182,12 +217,15 @@ async def route_libraries_words(
     library_id: int,
     page: int = Query(1, description="页码，从1开始"),
     page_size: int = Query(10, description="每页记录数", le=10000),
+    search: str | None = Query(None, description="按单词模糊搜索"),
     authorization: str | None = Header(None),
 ):
     user_id = _current_user_id(authorization)
     if user_id is None:
         return _json_200(UNAUTHORIZED)
-    return _json_200(libraries_service.library_words(user_id, library_id, page, page_size))
+    return _json_200(
+        libraries_service.library_words(user_id, library_id, page, page_size, search)
+    )
 
 
 @router.post("/libraries/add-word")
