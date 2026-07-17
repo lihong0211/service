@@ -42,3 +42,18 @@ CREATE TABLE IF NOT EXISTS word_library_items (
   CONSTRAINT fk_word_library_items_library_id FOREIGN KEY (word_library_id) REFERENCES word_libraries(id) ON DELETE CASCADE,
   CONSTRAINT fk_word_library_items_word_id FOREIGN KEY (word_id) REFERENCES words(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='词库与单词的多对多关联';
+
+-- 补丁：word_library_items 若是从 en-elctron 仓库 schema.sql 的旧"预留版本"建的
+-- （没有 updated_at），CREATE TABLE IF NOT EXISTS 不会补这一列——这里用
+-- information_schema 判断，缺列才补，MySQL 5.7/8.0 通用，可安全重复执行。
+SET @col_exists = (
+  SELECT COUNT(*) FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'word_library_items' AND COLUMN_NAME = 'updated_at'
+);
+SET @sql = IF(@col_exists = 0,
+  'ALTER TABLE word_library_items ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER created_at',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
