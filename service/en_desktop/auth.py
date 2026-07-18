@@ -100,6 +100,30 @@ def wechat_login(data: dict) -> dict:
         return unexpected_error_response(e, db.session)
 
 
+def mini_login(data: dict) -> dict:
+    """en-mini 小程序登录：code2session 换 openid，按 wx_mini 建/更新用户"""
+    code = data.get("code") or ""
+    if not code:
+        return {"code": 400, "msg": "缺少微信登录 code"}
+
+    try:
+        openid = wechat_oauth.exchange_code_for_mini_openid(code)
+    except RuntimeError as e:
+        return {"code": 500, "msg": str(e)}
+    except Exception as e:
+        return unexpected_error_response(e)
+
+    try:
+        user = EnDesktopUser.select_one_by({"wx_mini": openid})
+        if not user:
+            user_id = EnDesktopUser.insert({"wx_mini": openid, "nickname": "微信用户"})
+        else:
+            user_id = user.id
+        return _auth_success(user_id)
+    except Exception as e:
+        return unexpected_error_response(e, db.session)
+
+
 def resolve_user_by_token(token: str | None) -> EnDesktopUser | None:
     """按 token 查用户并校验有效期，无效返回 None"""
     if not token:

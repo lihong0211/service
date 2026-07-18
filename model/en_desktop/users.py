@@ -12,7 +12,8 @@ class EnDesktopUser(BaseEnDesktop, EnDesktopModel):
 
     username = Column(String(20), unique=True, index=True, nullable=True, comment="账号密码登录用户名")
     password = Column(String(255), nullable=True, comment="bcrypt 哈希")
-    wx = Column(String(64), unique=True, index=True, nullable=True, comment="微信 openid")
+    wx = Column(String(64), unique=True, index=True, nullable=True, comment="微信 openid（网页扫码登录，开放平台 appid）")
+    wx_mini = Column(String(64), unique=True, index=True, nullable=True, comment="微信 openid（en-mini 小程序 code2session 登录，appid 与 wx 字段不同）")
     nickname = Column(String(50), nullable=True)
     avatar = Column(String(255), nullable=True)
     phone = Column(String(11), index=True, nullable=True)
@@ -27,6 +28,7 @@ class EnDesktopUser(BaseEnDesktop, EnDesktopModel):
             "id": self.id,
             "username": self.username,
             "wx": self.wx,
+            "wx_mini": self.wx_mini,
             "nickname": self.nickname,
             "avatar": self.avatar,
             "phone": self.phone,

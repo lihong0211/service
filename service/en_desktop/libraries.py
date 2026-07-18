@@ -97,10 +97,10 @@ def _favorited_ids(user_id: int) -> set:
     return {f.word_library_id for f in favs}
 
 
-def list_public_libraries(user_id: int) -> dict:
-    """公共（系统）词库列表，任何登录用户可见；favorited 标记当前用户是否已收藏"""
+def list_public_libraries(user_id: int | None) -> dict:
+    """公共（系统）词库列表，不登录也可浏览；favorited 标记当前用户是否已收藏（未登录恒为 False）"""
     try:
-        favorited = _favorited_ids(user_id)
+        favorited = _favorited_ids(user_id) if user_id else set()
         libs = EnDesktopWordLibrary.select_by({"is_public": 1})
         return {
             "code": 200,
@@ -264,7 +264,7 @@ def delete_library(user_id: int, library_id: int) -> dict:
 
 
 def library_words(
-    user_id: int,
+    user_id: int | None,
     library_id: int,
     page: int = 1,
     page_size: int = 10,
@@ -272,7 +272,7 @@ def library_words(
 ) -> dict:
     """分页返回 {list, total, page, page_size}；search 按单词模糊匹配"""
     try:
-        # 自己的词库可读，公共词库任何登录用户可读；改/删仍只限属主
+        # 自己的词库可读，公共词库不登录也可读；改/删仍只限属主
         lib = EnDesktopWordLibrary.get_by_id(library_id)
         if not lib or (lib.user_id != user_id and not lib.is_public):
             return {"code": 400, "msg": "词库不存在"}

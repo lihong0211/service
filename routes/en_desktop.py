@@ -9,8 +9,11 @@ en-desktop 模块路由（记单词桌面客户端后端）
 from fastapi import APIRouter, Header, Query, Request
 from fastapi.responses import JSONResponse
 
+from service.en_desktop import affixes as affixes_service
 from service.en_desktop import auth as auth_service
+from service.en_desktop import daily_expressions as daily_expressions_service
 from service.en_desktop import libraries as libraries_service
+from service.en_desktop import roots as roots_service
 from service.en_desktop import users as users_service
 from service.en_desktop import words as words_service
 
@@ -55,6 +58,11 @@ async def route_auth_login(request: Request):
 @router.post("/auth/wechat/login")
 async def route_auth_wechat_login(request: Request):
     return _json_200(auth_service.wechat_login(await _body(request)))
+
+
+@router.post("/auth/wechat/mini-login")
+async def route_auth_wechat_mini_login(request: Request):
+    return _json_200(auth_service.mini_login(await _body(request)))
 
 
 @router.get("/auth/me")
@@ -138,6 +146,106 @@ async def route_words_delete(word_id: int = Query(..., description="wordID")):
     return _json_200(words_service.delete_word(word_id))
 
 
+# ---------- 日常用语 ----------
+@router.get("/daily-expressions/list")
+async def route_daily_expressions_list(
+    page: int = Query(1, description="页码，从1开始"),
+    page_size: int = Query(10, description="每页记录数", le=10000),
+    search: str | None = Query(None, description="按短语模糊搜索"),
+):
+    return _json_200(daily_expressions_service.list_expressions(page, page_size, search))
+
+
+@router.get("/daily-expressions/{expression_id}")
+async def route_daily_expressions_get(expression_id: int):
+    return _json_200(daily_expressions_service.get_expression(expression_id))
+
+
+@router.post("/daily-expressions/add")
+async def route_daily_expressions_add(request: Request):
+    return _json_200(daily_expressions_service.add_expression(await _body(request)))
+
+
+@router.post("/daily-expressions/update")
+async def route_daily_expressions_update(
+    request: Request, expression_id: int = Query(..., description="记录ID")
+):
+    return _json_200(
+        daily_expressions_service.update_expression(expression_id, await _body(request))
+    )
+
+
+@router.post("/daily-expressions/delete")
+async def route_daily_expressions_delete(expression_id: int = Query(..., description="记录ID")):
+    return _json_200(daily_expressions_service.delete_expression(expression_id))
+
+
+# ---------- 词根 ----------
+@router.get("/roots/list")
+async def route_roots_list():
+    return _json_200(roots_service.list_roots())
+
+
+@router.post("/roots/add")
+async def route_roots_add(request: Request):
+    return _json_200(roots_service.add_root(await _body(request)))
+
+
+@router.post("/roots/update")
+async def route_roots_update(request: Request, root_id: int = Query(..., description="记录ID")):
+    return _json_200(roots_service.update_root(root_id, await _body(request)))
+
+
+@router.post("/roots/delete")
+async def route_roots_delete(root_id: int = Query(..., description="记录ID")):
+    return _json_200(roots_service.delete_root(root_id))
+
+
+@router.post("/roots/add-word")
+async def route_roots_add_word(request: Request):
+    body = await _body(request)
+    return _json_200(roots_service.add_word(body.get("root_id"), body.get("word_id")))
+
+
+@router.post("/roots/remove-word")
+async def route_roots_remove_word(request: Request):
+    body = await _body(request)
+    return _json_200(roots_service.remove_word(body.get("root_id"), body.get("word_id")))
+
+
+# ---------- 词缀 ----------
+@router.get("/affixes/list")
+async def route_affixes_list():
+    return _json_200(affixes_service.list_affixes())
+
+
+@router.post("/affixes/add")
+async def route_affixes_add(request: Request):
+    return _json_200(affixes_service.add_affix(await _body(request)))
+
+
+@router.post("/affixes/update")
+async def route_affixes_update(request: Request, affix_id: int = Query(..., description="记录ID")):
+    return _json_200(affixes_service.update_affix(affix_id, await _body(request)))
+
+
+@router.post("/affixes/delete")
+async def route_affixes_delete(affix_id: int = Query(..., description="记录ID")):
+    return _json_200(affixes_service.delete_affix(affix_id))
+
+
+@router.post("/affixes/add-word")
+async def route_affixes_add_word(request: Request):
+    body = await _body(request)
+    return _json_200(affixes_service.add_word(body.get("affix_id"), body.get("word_id")))
+
+
+@router.post("/affixes/remove-word")
+async def route_affixes_remove_word(request: Request):
+    body = await _body(request)
+    return _json_200(affixes_service.remove_word(body.get("affix_id"), body.get("word_id")))
+
+
 # ---------- 词库（歌单式，全部需要登录） ----------
 @router.get("/libraries/public")
 async def route_libraries_public(authorization: str | None = Header(None)):
@@ -175,9 +283,10 @@ async def route_libraries_unfavorite(request: Request, authorization: str | None
 
 @router.get("/libraries/list")
 async def route_libraries_list(authorization: str | None = Header(None)):
+    # 不登录时退化成浏览公共词库（不含私有词库），登录后看自己的全部词库
     user_id = _current_user_id(authorization)
     if user_id is None:
-        return _json_200(UNAUTHORIZED)
+        return _json_200(libraries_service.list_public_libraries(None))
     return _json_200(libraries_service.list_libraries(user_id))
 
 
@@ -220,9 +329,8 @@ async def route_libraries_words(
     search: str | None = Query(None, description="按单词模糊搜索"),
     authorization: str | None = Header(None),
 ):
+    # 不登录也能看公共词库里的单词，私有词库仍然会被 service 层挡掉
     user_id = _current_user_id(authorization)
-    if user_id is None:
-        return _json_200(UNAUTHORIZED)
     return _json_200(
         libraries_service.library_words(user_id, library_id, page, page_size, search)
     )

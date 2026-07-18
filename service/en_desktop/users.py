@@ -20,7 +20,12 @@ def list_users(page: int = 1, page_size: int = 10, active: bool | None = None) -
         return {
             "code": 200,
             "msg": "success",
-            "data": [u.public_dict() for u in users[start:end]],
+            "data": {
+                "list": [u.public_dict() for u in users[start:end]],
+                "total": len(users),
+                "page": page,
+                "page_size": page_size,
+            },
         }
     except Exception as e:
         return unexpected_error_response(e, db.session)

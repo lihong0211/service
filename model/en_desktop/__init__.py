@@ -2,7 +2,10 @@
 """
 en-desktop 模型模块（记单词桌面客户端，english_new 库）
 """
+from .affixes import EnDesktopAffix, EnDesktopAffixWord
 from .base import BaseEnDesktop
+from .daily_expressions import EnDesktopDailyExpression
+from .roots import EnDesktopRoot, EnDesktopRootWord
 from .users import EnDesktopUser
 from .word_libraries import (
     EnDesktopWordLibrary,
@@ -20,4 +23,9 @@ __all__ = [
     "EnDesktopWordLibrary",
     "EnDesktopWordLibraryItem",
     "EnDesktopWordLibraryFavorite",
+    "EnDesktopDailyExpression",
+    "EnDesktopRoot",
+    "EnDesktopRootWord",
+    "EnDesktopAffix",
+    "EnDesktopAffixWord",
 ]
