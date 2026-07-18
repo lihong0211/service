@@ -2,13 +2,16 @@
 """
 en-desktop 词库模型（english_new.word_libraries / word_library_items，歌单式）
 """
-from sqlalchemy import Column, ForeignKey, Integer, String
+from sqlalchemy import Column, ForeignKey, Integer, String, UniqueConstraint
 
 from model.en_desktop.base import BaseEnDesktop, EnDesktopModel
 
 
 class EnDesktopWordLibrary(BaseEnDesktop, EnDesktopModel):
     __tablename__ = "word_libraries"
+    # 同一用户下词库名唯一：应用层"先查后插"不是原子操作，并发的重复创建
+    # 请求能双双通过检查，靠这个约束在数据库层兜底（详见 sql/ 迁移文件里的说明）
+    __table_args__ = (UniqueConstraint("user_id", "name", name="uk_user_library_name"),)
 
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     name = Column(String(50), nullable=False, comment="词库名称")

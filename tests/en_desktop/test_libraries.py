@@ -3,7 +3,7 @@ en-desktop 词库服务测试
 """
 import pytest
 
-from model.en_desktop import EnDesktopUser, EnDesktopWordLibraryItem
+from model.en_desktop import EnDesktopUser, EnDesktopWordLibrary, EnDesktopWordLibraryItem
 from service.en_desktop import libraries, words
 from service.en_desktop.libraries import DEFAULT_LIBRARY_NAME
 
@@ -32,8 +32,9 @@ def _add_word(word_text="apple"):
 def test_list_auto_creates_default_libraries(user_id):
     result = libraries.list_libraries(user_id)
     assert result["code"] == 200
-    names = [l["name"] for l in result["data"]]
-    assert names == [DEFAULT_LIBRARY_NAME, libraries.REVIEW_LIBRARY_NAME]
+    # list_libraries 不保证顺序（数据库物理返回顺序，加了唯一索引后也可能变），只比较集合
+    names = {l["name"] for l in result["data"]}
+    assert names == {DEFAULT_LIBRARY_NAME, libraries.REVIEW_LIBRARY_NAME}
     assert all(l["word_count"] == 0 for l in result["data"])
 
     # 再次 list 不会重复创建
@@ -53,6 +54,20 @@ def test_add_rename_delete_library(user_id):
     assert renamed["data"]["name"] == "六级词汇"
 
     assert libraries.delete_library(user_id, lib_id)["code"] == 200
+
+
+def test_add_library_concurrent_duplicate_hits_db_constraint(user_id):
+    """
+    并发建同名词库的回归测试：前端一次误触发（keyup.enter 级联出 blur）
+    会发出两个几乎同时的建库请求，应用层"先查是否存在再插入"的检查不是原子
+    操作，两个请求都可能通过检查。直接绕过 add_library 的检查、在它背后插入
+    一条同名记录来模拟这个竞态，验证唯一约束 + IntegrityError 处理能正确
+    兜底成友好提示，而不是让请求 500。
+    """
+    EnDesktopWordLibrary.insert({"user_id": user_id, "name": "并发词库"})
+    result = libraries.add_library(user_id, {"name": "并发词库"})
+    assert result["code"] == 400
+    assert result["msg"] == "同名词库已存在"
     names = [l["name"] for l in libraries.list_libraries(user_id)["data"]]
     assert "六级词汇" not in names
 

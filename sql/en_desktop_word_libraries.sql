@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS word_libraries (
   created_at  DATETIME     DEFAULT CURRENT_TIMESTAMP,
   updated_at  DATETIME     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   deleted_at  DATETIME     NULL COMMENT '软删除时间',
+  UNIQUE KEY uk_user_library_name (user_id, name),
   CONSTRAINT fk_word_libraries_user_id FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='个人词库（类似歌单）';
 
@@ -52,6 +53,24 @@ SET @col_exists = (
 );
 SET @sql = IF(@col_exists = 0,
   'ALTER TABLE word_library_items ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER created_at',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- 补丁：word_libraries 补 (user_id, name) 唯一约束（同一原因，早期建表版本没有）。
+-- 应用层"先查是否存在再插入"不是原子操作，前端一次误触发出的并发请求能双双
+-- 通过检查、各自插入，留下两条同名词库；这里在数据库层兜底。
+-- 已知取舍：约束不看 deleted_at，软删词库和一个同名的新词库会撞车——
+-- 这种场景很少见，MySQL 原生不支持"只在未删除的行里唯一"的索引，
+-- 不为这个边缘情况引入生成列，需要时再处理。
+SET @idx_exists = (
+  SELECT COUNT(*) FROM information_schema.STATISTICS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'word_libraries' AND INDEX_NAME = 'uk_user_library_name'
+);
+SET @sql = IF(@idx_exists = 0,
+  'ALTER TABLE word_libraries ADD UNIQUE KEY uk_user_library_name (user_id, name)',
   'SELECT 1'
 );
 PREPARE stmt FROM @sql;

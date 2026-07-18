@@ -5,6 +5,8 @@ en-desktop 词库服务（歌单式）：词库 CRUD + 词库内单词管理。
 """
 from datetime import datetime
 
+from sqlalchemy.exc import IntegrityError
+
 from app.database import db
 from app.errors import unexpected_error_response
 from model.en_desktop import (
@@ -186,13 +188,23 @@ def add_library(user_id: int, data: dict) -> dict:
         if EnDesktopWordLibrary.select_one_by({"user_id": user_id, "name": name}):
             return {"code": 400, "msg": "同名词库已存在"}
         lib_id = EnDesktopWordLibrary.insert(
-            {"user_id": user_id, "name": name, "description": data.get("description")}
+            {
+                "user_id": user_id,
+                "name": name,
+                "description": data.get("description"),
+                "is_public": 1 if data.get("is_public") else 0,
+            }
         )
         return {
             "code": 200,
             "msg": "success",
             "data": EnDesktopWordLibrary.get_by_id(lib_id).to_dict(),
         }
+    except IntegrityError:
+        # 上面的存在性检查不是原子操作：两个并发请求都可能先后通过检查再各自插入，
+        # 靠 (user_id, name) 唯一约束在数据库层兜底，命中即为并发建同名库
+        db.session.rollback()
+        return {"code": 400, "msg": "同名词库已存在"}
     except Exception as e:
         return unexpected_error_response(e, db.session)
 
@@ -218,6 +230,8 @@ def update_library(user_id: int, library_id: int, data: dict) -> dict:
             update_dict["name"] = new_name
         if data.get("description") is not None:
             update_dict["description"] = data["description"]
+        if data.get("is_public") is not None:
+            update_dict["is_public"] = 1 if data["is_public"] else 0
         EnDesktopWordLibrary.update(update_dict)
         return {
             "code": 200,
@@ -226,6 +240,9 @@ def update_library(user_id: int, library_id: int, data: dict) -> dict:
                 word_count=_word_count(library_id)
             ),
         }
+    except IntegrityError:
+        db.session.rollback()
+        return {"code": 400, "msg": "同名词库已存在"}
     except Exception as e:
         return unexpected_error_response(e, db.session)
 
