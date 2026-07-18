@@ -29,11 +29,9 @@ def _words_by_affix(affix_ids: list) -> dict:
 
 
 def _pack(data: dict) -> dict:
-    similar = data.get("similar")
     return {
         "name": data.get("name"),
         "meaning": data.get("meaning"),
-        "similar": ",".join(similar) if isinstance(similar, list) else similar,
     }
 
 
