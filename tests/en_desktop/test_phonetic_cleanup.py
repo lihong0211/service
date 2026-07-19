@@ -20,11 +20,37 @@ def test_remap_replaces_caret_with_g():
 
 
 def test_remap_replaces_colon_with_length_mark():
-    assert remap_legacy_symbols("['senti,mi:tә(r)]".replace(",", "")) == "ˈsentimiːtər"
+    assert remap_legacy_symbols("['senti,mi:tә(r)]".replace(",", "")) == "ˈsentɪmiːtər"
 
 
 def test_remap_strips_optional_parens_keeping_content():
-    assert remap_legacy_symbols("['mistә(r)]") == "ˈmistər"
+    assert remap_legacy_symbols("['mistә(r)]") == "ˈmɪstər"
+
+
+def test_remap_fixes_ei_diphthong():
+    assert remap_legacy_symbols("[ˈeibl]") == "ˈeɪbl"
+
+
+def test_remap_fixes_au_diphthong():
+    assert remap_legacy_symbols("[ә'baut]") == "əˈbaʊt"
+
+
+def test_remap_fixes_ai_diphthong():
+    assert remap_legacy_symbols("[ә'baid]") == "əˈbaɪd"
+
+
+def test_remap_fixes_ou_diphthong():
+    assert remap_legacy_symbols("[ˈskoul]") == "ˈskoʊl"
+
+
+def test_remap_keeps_long_i_and_u_untouched():
+    assert remap_legacy_symbols("[skuːl]") == "skuːl"
+    assert remap_legacy_symbols("[bri:vi]") == "briːvɪ"
+
+
+def test_remap_bare_i_and_u_become_short_vowels():
+    assert remap_legacy_symbols("[bit]") == "bɪt"
+    assert remap_legacy_symbols("[buk]") == "bʊk"
 
 
 def test_needs_refetch_true_for_null_or_placeholder():

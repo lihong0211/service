@@ -10,10 +10,15 @@
 - 直引号 ' 代替主重音符 ˈ
 - ASCII 冒号 : 代替长音符 ː
 - (r) 这类圆括号表示可选音，这里统一当作"发这个音"处理，只去括号保留内容
+- 裸 ASCII 字母 i/u 身兼两职：紧跟在冒号前表示长元音 iː/uː（先转成 ː 处理），
+  其余情况（包括单独出现，或紧跟在另一个元音字母后构成双元音 ei/ai/au/ou）
+  一律代表短元音 ɪ/ʊ——比如 "eibl"（able）要变成 "eɪbl"，"baut"（about）要变成 "baʊt"
 
 逗号/分号分隔的多音变体、反斜杠损坏的片段、空值/占位符，这些没法靠字符映射修，
 交给 needs_refetch 判断，由调用方重新查词典或用 AI 补。
 """
+import re
+
 LEGACY_CHAR_MAP = {
     "ә": "ə",
     "є": "ɛ",
@@ -22,6 +27,10 @@ LEGACY_CHAR_MAP = {
     "'": "ˈ",
     ":": "ː",
 }
+
+# 长元音标记转换完成后，剩下的裸 i/u（后面不是长音符 ː）一律是短元音
+_BARE_I_RE = re.compile(r"i(?!ː)")
+_BARE_U_RE = re.compile(r"u(?!ː)")
 
 # 映射修复后，一个"干净"的音标里应该只包含这些字符
 _CLEAN_IPA_CHARS = set(
@@ -40,7 +49,10 @@ def remap_legacy_symbols(raw: str) -> str:
     if body.startswith("[") and body.endswith("]"):
         body = body[1:-1]
     body = body.replace("(", "").replace(")", "")
-    return "".join(LEGACY_CHAR_MAP.get(ch, ch) for ch in body)
+    body = "".join(LEGACY_CHAR_MAP.get(ch, ch) for ch in body)
+    body = _BARE_I_RE.sub("ɪ", body)
+    body = _BARE_U_RE.sub("ʊ", body)
+    return body
 
 
 def needs_refetch(raw: str | None) -> bool:
