@@ -49,3 +49,25 @@ def tokenize_ipa(ipa: str) -> list[str] | None:
         else:
             return None
     return tokens
+
+
+def validate_segments(word: str, ipa: str, segments: list) -> bool:
+    """
+    校验 LLM 返回的拆分结果，全部满足才算通过：
+    1. 所有 letters 依次拼接（忽略大小写）等于原词
+    2. 所有 ipa 依次拼接（去装饰符号后）等于原始音标同样处理后的结果
+    3. 每一段 ipa 都能被音素清单完整分词（不含清单外符号）
+    """
+    if not segments:
+        return False
+    try:
+        letters_concat = "".join(seg["letters"] for seg in segments)
+        ipa_concat = "".join(normalize_ipa(seg["ipa"]) for seg in segments)
+    except (KeyError, TypeError):
+        return False
+
+    if letters_concat.lower() != (word or "").lower():
+        return False
+    if ipa_concat != normalize_ipa(ipa):
+        return False
+    return all(tokenize_ipa(seg["ipa"]) for seg in segments)
