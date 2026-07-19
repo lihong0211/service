@@ -13,6 +13,8 @@ from .word_libraries import (
     EnDesktopWordLibraryItem,
 )
 from .word_meanings import EnDesktopWordMeaning
+from .word_phonics import EnDesktopWordPhonics
+from .word_sentences import EnDesktopWordSentence
 from .words import EnDesktopWord
 
 __all__ = [
@@ -20,6 +22,8 @@ __all__ = [
     "EnDesktopUser",
     "EnDesktopWord",
     "EnDesktopWordMeaning",
+    "EnDesktopWordPhonics",
+    "EnDesktopWordSentence",
     "EnDesktopWordLibrary",
     "EnDesktopWordLibraryItem",
     "EnDesktopWordLibraryFavorite",
