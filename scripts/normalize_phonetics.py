@@ -72,7 +72,11 @@ def main():
             if refetch_budget is not None and refetch_budget <= 0:
                 continue
             fetched = fetch_pronunciation(w.word)
-            if fetched:
+            has_real_pronunciation = fetched and "-" not in (
+                fetched.get("en_pronunciation"),
+                fetched.get("us_pronunciation"),
+            )
+            if has_real_pronunciation:
                 refetched = fetched
                 stats["dictionary"] += 1
                 print(f"[词典] {w.word} -> {fetched}")
