@@ -37,6 +37,29 @@ def _any_pronunciation(phonetics: list) -> str:
     return ""
 
 
+def fetch_pronunciation(word: str) -> dict | None:
+    """
+    只拿音标，不查释义、不调有道翻译（scripts/normalize_phonetics.py 补音标用，
+    避免为了拿音标而白白触发释义翻译的网络调用）。
+    返回结构：{"en_pronunciation", "us_pronunciation"}，查不到时返回 None
+    """
+    resp = requests.get(FREE_DICTIONARY_API_URL.format(word=word), timeout=5)
+    if resp.status_code != 200:
+        return None
+
+    entries = resp.json()
+    if not entries:
+        return None
+
+    entry = entries[0]
+    phonetics = entry.get("phonetics", [])
+    fallback = entry.get("phonetic") or _any_pronunciation(phonetics) or "-"
+    return {
+        "en_pronunciation": _pick_pronunciation(phonetics, "-uk") or fallback,
+        "us_pronunciation": _pick_pronunciation(phonetics, "-us") or fallback,
+    }
+
+
 def lookup_word(word: str) -> dict | None:
     """
     返回结构：{"word", "meaning": [{"type", "content"}], "en_pronunciation", "us_pronunciation"}

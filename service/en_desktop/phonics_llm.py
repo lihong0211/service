@@ -55,3 +55,44 @@ def request_phonics_segments(word: str, ipa: str) -> list | None:
         return json.loads(content)["segments"]
     except (KeyError, IndexError, ValueError, TypeError):
         return None
+
+
+_IPA_PROMPT_TEMPLATE = """你是英语词典编纂专家。给出单词的美式英语 IPA 音标。
+
+单词：{word}
+
+要求：
+1. 只返回音标本身，用 /.../ 包裹，标准 Unicode IPA 字符（重音符用 ˈˌ，长音符用 ː）
+2. 不要任何解释文字、不要词性、不要例句
+"""
+
+
+def request_ipa_pronunciation(word: str) -> str | None:
+    """
+    数据库音标坏到没法修、词典 API 也查不到时的最后兜底：让 LLM 直接给出音标。
+    调用方应该把这类结果标记为"AI 生成，建议复核"，不当作权威数据源。
+    HTTP 失败或返回空内容时返回 None。
+    """
+    api_key = os.environ.get("DASHSCOPE_API_KEY")
+    if not api_key:
+        raise RuntimeError("DASHSCOPE_API_KEY 未配置")
+
+    payload = {
+        "model": DASHSCOPE_MODEL,
+        "messages": [{"role": "user", "content": _IPA_PROMPT_TEMPLATE.format(word=word)}],
+        "temperature": 0,
+    }
+    resp = requests.post(
+        DASHSCOPE_CHAT_URL,
+        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        json=payload,
+        timeout=30,
+    )
+    if resp.status_code != 200:
+        return None
+
+    try:
+        content = resp.json()["choices"][0]["message"]["content"].strip()
+    except (KeyError, IndexError, TypeError):
+        return None
+    return content or None

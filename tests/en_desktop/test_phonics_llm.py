@@ -58,3 +58,32 @@ def test_request_phonics_segments_missing_api_key(monkeypatch):
 
     with pytest.raises(RuntimeError):
         phonics_llm.request_phonics_segments("cat", "/kæt/")
+
+
+def _llm_text_response(text):
+    return _FakeResponse(200, {"choices": [{"message": {"content": text}}]})
+
+
+def test_request_ipa_pronunciation_success(monkeypatch):
+    monkeypatch.setenv("DASHSCOPE_API_KEY", "test-key")
+    monkeypatch.setattr(
+        phonics_llm.requests, "post", lambda *a, **kw: _llm_text_response("/kənˈvɜːrsli/")
+    )
+
+    assert phonics_llm.request_ipa_pronunciation("conversely") == "/kənˈvɜːrsli/"
+
+
+def test_request_ipa_pronunciation_http_error(monkeypatch):
+    monkeypatch.setenv("DASHSCOPE_API_KEY", "test-key")
+    monkeypatch.setattr(phonics_llm.requests, "post", lambda *a, **kw: _FakeResponse(500, {}))
+
+    assert phonics_llm.request_ipa_pronunciation("conversely") is None
+
+
+def test_request_ipa_pronunciation_empty_content(monkeypatch):
+    monkeypatch.setenv("DASHSCOPE_API_KEY", "test-key")
+    monkeypatch.setattr(
+        phonics_llm.requests, "post", lambda *a, **kw: _llm_text_response("   ")
+    )
+
+    assert phonics_llm.request_ipa_pronunciation("conversely") is None
