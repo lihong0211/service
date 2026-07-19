@@ -9,6 +9,10 @@ def test_normalize_ipa_strips_slashes_stress_and_dots():
     assert normalize_ipa("/ˈæp.əl/") == "æpəl"
 
 
+def test_normalize_ipa_strips_brackets():
+    assert normalize_ipa("[ˈæpəl]") == "æpəl"
+
+
 def test_tokenize_ipa_regular_word():
     assert tokenize_ipa("/kæt/") == ["k", "æ", "t"]
 

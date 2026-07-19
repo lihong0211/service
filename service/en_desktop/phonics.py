@@ -26,12 +26,12 @@ PHONEMES = sorted(
     reverse=True,
 )
 
-# 音标里忽略的装饰符号：斜杠、重音符 ˈˌ、音节分隔点、空格
-_STRIP_RE = re.compile(r"[/ˈˌ.\s]")
+# 音标里忽略的装饰符号：斜杠、方括号、重音符 ˈˌ、音节分隔点、空格
+_STRIP_RE = re.compile(r"[/\[\]ˈˌ.\s]")
 
 
 def normalize_ipa(ipa: str) -> str:
-    """去掉 /.../ 包裹、重音符 ˈˌ、音节分隔点 . 和空格"""
+    """去掉 /.../ 或 [...] 包裹、重音符 ˈˌ、音节分隔点 . 和空格"""
     return _STRIP_RE.sub("", ipa or "")
 
 
