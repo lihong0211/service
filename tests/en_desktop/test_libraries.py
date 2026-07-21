@@ -3,7 +3,13 @@ en-desktop 词库服务测试
 """
 import pytest
 
-from model.en_desktop import EnDesktopUser, EnDesktopWordLibrary, EnDesktopWordLibraryItem
+from model.en_desktop import (
+    EnDesktopUser,
+    EnDesktopWordLibrary,
+    EnDesktopWordLibraryItem,
+    EnDesktopWordMeaning,
+    EnDesktopWordSentence,
+)
 from service.en_desktop import libraries, words
 from service.en_desktop.libraries import DEFAULT_LIBRARY_NAME
 
@@ -255,3 +261,37 @@ def test_delete_library_removes_items(user_id):
     libraries.delete_library(user_id, lib_id)
     active_items = EnDesktopWordLibraryItem.select_by({"word_library_id": lib_id})
     assert active_items == []
+
+
+def test_library_words_meaning_carries_sentence(user_id):
+    word_id = _add_word("apple")
+    lib_id = libraries.list_libraries(user_id)["data"][0]["id"]
+    libraries.add_item(lib_id, word_id)
+
+    meaning = EnDesktopWordMeaning.select_by({"word_id": word_id})[0]
+    EnDesktopWordSentence.insert(
+        {
+            "word_meaning_id": meaning.id,
+            "en_text": "I ate an apple.",
+            "zh_text": "我吃了一个苹果。",
+            "audio_url": "https://doctor-dog.com/static/word_sentences/1.mp3",
+        }
+    )
+
+    result = libraries.library_words(user_id, lib_id)
+    word = result["data"]["list"][0]
+    assert word["meaning"][0]["sentence"] == {
+        "en_text": "I ate an apple.",
+        "zh_text": "我吃了一个苹果。",
+        "audio_url": "https://doctor-dog.com/static/word_sentences/1.mp3",
+    }
+
+
+def test_library_words_meaning_without_sentence_is_none(user_id):
+    word_id = _add_word("banana")
+    lib_id = libraries.list_libraries(user_id)["data"][0]["id"]
+    libraries.add_item(lib_id, word_id)
+
+    result = libraries.library_words(user_id, lib_id)
+    word = result["data"]["list"][0]
+    assert word["meaning"][0]["sentence"] is None

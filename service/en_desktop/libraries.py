@@ -15,6 +15,7 @@ from model.en_desktop import (
     EnDesktopWordLibraryFavorite,
     EnDesktopWordLibraryItem,
     EnDesktopWordMeaning,
+    EnDesktopWordSentence,
 )
 
 DEFAULT_LIBRARY_NAME = "默认收藏"
@@ -48,8 +49,30 @@ def owned_library(user_id: int, library_id: int) -> EnDesktopWordLibrary | None:
     return lib
 
 
+def _sentences_grouped(meaning_ids: list) -> dict:
+    """word_meaning_id -> {en_text, zh_text, audio_url}，一次查询代替逐条查询"""
+    grouped = {}
+    if not meaning_ids:
+        return grouped
+    rows = (
+        db.session.query(EnDesktopWordSentence)
+        .where(
+            EnDesktopWordSentence.word_meaning_id.in_(meaning_ids),
+            EnDesktopWordSentence.deleted_at.is_(None),
+        )
+        .all()
+    )
+    for s in rows:
+        grouped[s.word_meaning_id] = {
+            "en_text": s.en_text,
+            "zh_text": s.zh_text,
+            "audio_url": s.audio_url,
+        }
+    return grouped
+
+
 def _meanings_grouped(word_ids: list) -> dict:
-    """word_id -> [{type, content}]，一次查询代替逐词查询"""
+    """word_id -> [{type, content, sentence}]，一次查询代替逐词查询"""
     grouped = {}
     if not word_ids:
         return grouped
@@ -62,8 +85,11 @@ def _meanings_grouped(word_ids: list) -> dict:
         .order_by(EnDesktopWordMeaning.id.asc())
         .all()
     )
+    sentences = _sentences_grouped([m.id for m in rows])
     for m in rows:
-        grouped.setdefault(m.word_id, []).append({"type": m.type, "content": m.content})
+        grouped.setdefault(m.word_id, []).append(
+            {"type": m.type, "content": m.content, "sentence": sentences.get(m.id)}
+        )
     return grouped
 
 
