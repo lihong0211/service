@@ -81,12 +81,15 @@ def request_phonics_segments(word: str, ipa: str) -> list | None:
     messages = [{"role": "user", "content": _PROMPT_TEMPLATE.format(word=word, ipa=ipa)}]
 
     for _ in range(MAX_PHONICS_ATTEMPTS):
-        resp = requests.post(
-            DASHSCOPE_CHAT_URL,
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-            json={"model": DASHSCOPE_MODEL, "messages": messages, "temperature": 0},
-            timeout=30,
-        )
+        try:
+            resp = requests.post(
+                DASHSCOPE_CHAT_URL,
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                json={"model": DASHSCOPE_MODEL, "messages": messages, "temperature": 0},
+                timeout=60,
+            )
+        except requests.exceptions.RequestException:
+            return None
         if resp.status_code != 200:
             return None
 
@@ -133,12 +136,15 @@ def request_ipa_pronunciation(word: str) -> str | None:
         "messages": [{"role": "user", "content": _IPA_PROMPT_TEMPLATE.format(word=word)}],
         "temperature": 0,
     }
-    resp = requests.post(
-        DASHSCOPE_CHAT_URL,
-        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-        json=payload,
-        timeout=30,
-    )
+    try:
+        resp = requests.post(
+            DASHSCOPE_CHAT_URL,
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json=payload,
+            timeout=30,
+        )
+    except requests.exceptions.RequestException:
+        return None
     if resp.status_code != 200:
         return None
 

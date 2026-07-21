@@ -119,6 +119,16 @@ def test_request_phonics_segments_gives_up_after_max_attempts(monkeypatch):
     assert len(calls) == phonics_llm.MAX_PHONICS_ATTEMPTS
 
 
+def test_request_phonics_segments_network_exception_returns_none(monkeypatch):
+    monkeypatch.setenv("DASHSCOPE_API_KEY", "test-key")
+
+    def _raise(*a, **kw):
+        raise phonics_llm.requests.exceptions.ReadTimeout("timed out")
+
+    monkeypatch.setattr(phonics_llm.requests, "post", _raise)
+    assert phonics_llm.request_phonics_segments("cat", "/kæt/") is None
+
+
 def _llm_text_response(text):
     return _FakeResponse(200, {"choices": [{"message": {"content": text}}]})
 
@@ -145,4 +155,14 @@ def test_request_ipa_pronunciation_empty_content(monkeypatch):
         phonics_llm.requests, "post", lambda *a, **kw: _llm_text_response("   ")
     )
 
+    assert phonics_llm.request_ipa_pronunciation("conversely") is None
+
+
+def test_request_ipa_pronunciation_network_exception_returns_none(monkeypatch):
+    monkeypatch.setenv("DASHSCOPE_API_KEY", "test-key")
+
+    def _raise(*a, **kw):
+        raise phonics_llm.requests.exceptions.ConnectionError("boom")
+
+    monkeypatch.setattr(phonics_llm.requests, "post", _raise)
     assert phonics_llm.request_ipa_pronunciation("conversely") is None
