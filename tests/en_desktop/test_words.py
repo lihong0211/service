@@ -1,7 +1,7 @@
 """
 en-desktop 单词服务测试
 """
-from model.en_desktop import EnDesktopWord, EnDesktopWordMeaning
+from model.en_desktop import EnDesktopWord, EnDesktopWordMeaning, EnDesktopWordSentence
 from service.en_desktop import words
 
 WORD_PAYLOAD = {
@@ -16,7 +16,9 @@ def test_add_and_get_word(en_desktop_db):
     result = words.add_word(dict(WORD_PAYLOAD))
     assert result["code"] == 200
     word_id = result["data"]["id"]
-    assert result["data"]["meaning"] == [{"type": "n.", "content": "苹果"}]
+    assert result["data"]["meaning"] == [
+        {"type": "n.", "content": "苹果", "sentence": None}
+    ]
 
     got = words.get_word(word_id)
     assert got["code"] == 200
@@ -133,3 +135,23 @@ def test_lookup_not_found_and_error(en_desktop_db, monkeypatch):
     assert "YOUDAO" in result["msg"]
 
     assert words.lookup({})["code"] == 400
+
+
+def test_get_word_meaning_carries_sentence(en_desktop_db):
+    word_id = words.add_word(dict(WORD_PAYLOAD))["data"]["id"]
+    meaning = EnDesktopWordMeaning.select_by({"word_id": word_id})[0]
+    EnDesktopWordSentence.insert(
+        {
+            "word_meaning_id": meaning.id,
+            "en_text": "I ate an apple.",
+            "zh_text": "我吃了一个苹果。",
+            "audio_url": None,
+        }
+    )
+
+    result = words.get_word(word_id)
+    assert result["data"]["meaning"][0]["sentence"] == {
+        "en_text": "I ate an apple.",
+        "zh_text": "我吃了一个苹果。",
+        "audio_url": None,
+    }

@@ -7,12 +7,16 @@ from app.errors import unexpected_error_response
 from model.en_desktop import EnDesktopWord, EnDesktopWordMeaning
 from service.en_desktop import dictionary
 from service.en_desktop import libraries as libraries_service
-from service.en_desktop.libraries import _meanings_grouped
+from service.en_desktop.libraries import _meanings_grouped, _sentences_grouped
 
 
 def _meanings_of(word_id: int) -> list:
     meanings = EnDesktopWordMeaning.select_by({"word_id": word_id})
-    return [{"type": m.type, "content": m.content} for m in meanings]
+    sentences = _sentences_grouped([m.id for m in meanings])
+    return [
+        {"type": m.type, "content": m.content, "sentence": sentences.get(m.id)}
+        for m in meanings
+    ]
 
 
 def _word_with_meanings(word: EnDesktopWord) -> dict:
