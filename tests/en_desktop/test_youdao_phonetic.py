@@ -51,3 +51,11 @@ def test_fetch_phonetic_missing_phone_fields(monkeypatch):
 def test_fetch_phonetic_http_error(monkeypatch):
     monkeypatch.setattr(youdao.requests, "get", lambda *a, **kw: _FakeResponse(500, {}))
     assert youdao.fetch_phonetic("conversely") is None
+
+
+def test_fetch_phonetic_network_exception_returns_none(monkeypatch):
+    def _raise(*a, **kw):
+        raise youdao.requests.exceptions.ReadTimeout("timed out")
+
+    monkeypatch.setattr(youdao.requests, "get", _raise)
+    assert youdao.fetch_phonetic("conversely") is None

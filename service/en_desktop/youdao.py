@@ -75,7 +75,10 @@ def fetch_phonetic(word: str) -> dict | None:
     返回结构：{"en_pronunciation"（英式）, "us_pronunciation"（美式）}，
     查不到词条或没有音标字段时返回 None。
     """
-    resp = requests.get(YOUDAO_DICT_JSONAPI_URL, params={"q": word}, timeout=5)
+    try:
+        resp = requests.get(YOUDAO_DICT_JSONAPI_URL, params={"q": word}, timeout=8)
+    except requests.exceptions.RequestException:
+        return None
     if resp.status_code != 200:
         return None
 
