@@ -2,7 +2,12 @@
 """
 拼读拆分：IPA 分词与校验逻辑测试（纯函数，不依赖数据库）
 """
-from service.en_desktop.phonics import normalize_ipa, tokenize_ipa, validate_segments
+from service.en_desktop.phonics import (
+    diagnose_segments,
+    normalize_ipa,
+    tokenize_ipa,
+    validate_segments,
+)
 
 
 def test_normalize_ipa_strips_slashes_stress_and_dots():
@@ -47,3 +52,32 @@ def test_validate_segments_rejects_unknown_ipa_symbol():
 
 def test_validate_segments_empty_list_is_invalid():
     assert validate_segments("cat", "/kæt/", []) is False
+
+
+def test_diagnose_segments_valid_returns_none():
+    segments = [{"letters": "c", "ipa": "k"}, {"letters": "a", "ipa": "æ"}, {"letters": "t", "ipa": "t"}]
+    assert diagnose_segments("cat", "/kæt/", segments) is None
+
+
+def test_diagnose_segments_empty_list():
+    assert diagnose_segments("cat", "/kæt/", []) == "没有返回任何 segments"
+
+
+def test_diagnose_segments_letters_mismatch_names_actual_and_expected():
+    segments = [{"letters": "c", "ipa": "k"}, {"letters": "o", "ipa": "æ"}, {"letters": "t", "ipa": "t"}]
+    msg = diagnose_segments("cat", "/kæt/", segments)
+    assert "cot" in msg
+    assert "cat" in msg
+
+
+def test_diagnose_segments_ipa_mismatch_names_actual_and_expected():
+    segments = [{"letters": "c", "ipa": "k"}, {"letters": "a", "ipa": "e"}, {"letters": "t", "ipa": "t"}]
+    msg = diagnose_segments("cat", "/kæt/", segments)
+    assert "ket" in msg
+    assert "kæt" in msg
+
+
+def test_diagnose_segments_unknown_ipa_symbol_names_the_segment():
+    segments = [{"letters": "ca", "ipa": "k@"}, {"letters": "t", "ipa": "t"}]
+    msg = diagnose_segments("cat", "/k@t/", segments)
+    assert "k@" in msg

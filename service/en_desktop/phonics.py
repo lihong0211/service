@@ -51,23 +51,36 @@ def tokenize_ipa(ipa: str) -> list[str] | None:
     return tokens
 
 
-def validate_segments(word: str, ipa: str, segments: list) -> bool:
+def diagnose_segments(word: str, ipa: str, segments: list) -> str | None:
     """
-    校验 LLM 返回的拆分结果，全部满足才算通过：
+    校验 LLM 返回的拆分结果，返回具体哪里错了（供重试时把错误原因喂回给 LLM）；
+    全部满足时返回 None：
     1. 所有 letters 依次拼接（忽略大小写）等于原词
     2. 所有 ipa 依次拼接（去装饰符号后）等于原始音标同样处理后的结果
     3. 每一段 ipa 都能被音素清单完整分词（不含清单外符号）
     """
     if not segments:
-        return False
+        return "没有返回任何 segments"
     try:
         letters_concat = "".join(seg["letters"] for seg in segments)
         ipa_concat = "".join(normalize_ipa(seg["ipa"]) for seg in segments)
     except (KeyError, TypeError):
-        return False
+        return "每个 segment 必须同时有 letters 和 ipa 两个字段"
 
-    if letters_concat.lower() != (word or "").lower():
-        return False
-    if ipa_concat != normalize_ipa(ipa):
-        return False
-    return all(tokenize_ipa(seg["ipa"]) for seg in segments)
+    expected_word = (word or "").lower()
+    if letters_concat.lower() != expected_word:
+        return f"所有 letters 依次拼接是 {letters_concat!r}，应该逐字符等于单词 {word!r}"
+
+    expected_ipa = normalize_ipa(ipa)
+    if ipa_concat != expected_ipa:
+        return f"所有 ipa 依次拼接是 {ipa_concat!r}，应该逐字符等于音标处理后的 {expected_ipa!r}"
+
+    for seg in segments:
+        if not tokenize_ipa(seg["ipa"]):
+            return f"片段 {seg!r} 的 ipa 不是清单内的合法音素组合"
+    return None
+
+
+def validate_segments(word: str, ipa: str, segments: list) -> bool:
+    """校验 LLM 返回的拆分结果是否完全通过，规则见 diagnose_segments"""
+    return diagnose_segments(word, ipa, segments) is None
