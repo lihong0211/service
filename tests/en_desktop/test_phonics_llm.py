@@ -36,6 +36,22 @@ def test_request_phonics_segments_success(monkeypatch):
     assert result == segments
 
 
+def test_request_phonics_segments_uses_thinking_model(monkeypatch):
+    monkeypatch.setenv("DASHSCOPE_API_KEY", "test-key")
+    segments = [{"letters": "c", "ipa": "k"}, {"letters": "at", "ipa": "æt"}]
+    captured = {}
+
+    def fake_post(*args, **kwargs):
+        captured.update(kwargs["json"])
+        return _llm_json_response(segments)
+
+    monkeypatch.setattr(phonics_llm.requests, "post", fake_post)
+    phonics_llm.request_phonics_segments("cat", "/kæt/")
+
+    assert captured["model"] == phonics_llm.DASHSCOPE_THINKING_MODEL
+    assert captured["enable_thinking"] is True
+
+
 def test_request_phonics_segments_http_error(monkeypatch):
     monkeypatch.setenv("DASHSCOPE_API_KEY", "test-key")
     monkeypatch.setattr(

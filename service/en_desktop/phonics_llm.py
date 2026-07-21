@@ -13,6 +13,10 @@ from service.en_desktop.phonics import diagnose_segments
 
 DASHSCOPE_CHAT_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
 DASHSCOPE_MODEL = "qwen-max"
+# qwen3-max 是支持"深度思考"的商业版模型，开 enable_thinking 后模型会先在 reasoning_content
+# 里认真推理再给 content 答案（原生思考，比在 prompt 里让非思考模型口头假装推理更可靠），
+# 且官方文档确认支持非流式（同步）调用。拼读拆分这种要求逐字符精确对齐的任务用它。
+DASHSCOPE_THINKING_MODEL = "qwen3-max"
 
 # 拼读拆分最多尝试几次（首次 + 带错误反馈的重试），把校验失败的具体原因喂回给模型，
 # 比盲目重新问一遍更容易收敛到完全正确的答案。
@@ -40,8 +44,7 @@ _PROMPT_TEMPLATE = """你是英语自然拼读（phonics）教学专家。给定
 校验方法：letters 拼起来 "sch"+"oo"+"l" = "school"，跟单词一致；ipa 拼起来 "sk"+"uː"+"l" = "skuːl"，
 跟音标（去掉 / 和重音符后）逐字符一致，没有重复也没有遗漏——你的输出也要满足同样的逐字符一致。
 
-请先逐段写出你的拆分和验证过程（letters 拼起来是什么、ipa 拼起来是什么、是否分别等于单词和
-音标），确认无误后，把最终答案放进一个 ```json 代码块，格式：
+正式回答前请在心里逐段验证一遍上面的一致性，确认无误后，把最终答案放进一个 ```json 代码块，格式：
 ```json
 {{"segments": [{{"letters": "...", "ipa": "..."}}]}}
 ```
@@ -85,8 +88,13 @@ def request_phonics_segments(word: str, ipa: str) -> list | None:
             resp = requests.post(
                 DASHSCOPE_CHAT_URL,
                 headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-                json={"model": DASHSCOPE_MODEL, "messages": messages, "temperature": 0},
-                timeout=60,
+                json={
+                    "model": DASHSCOPE_THINKING_MODEL,
+                    "messages": messages,
+                    "temperature": 0,
+                    "enable_thinking": True,
+                },
+                timeout=90,
             )
         except requests.exceptions.RequestException:
             return None
