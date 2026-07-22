@@ -28,6 +28,10 @@ ALGORITHM = "TC3-HMAC-SHA256"
 # PrimaryLanguage: 1=中文（默认），2=英文——例句是英文，必须显式指定，否则按中文合成
 PRIMARY_LANGUAGE_ENGLISH = 2
 
+# 默认音色 WeJames（大模型音色，英文男声），免费额度是"大模型音色"那个较小的池子（10万字符）。
+# 额度不够时换成 WeJack（101050，精品音色，同样英文男声），走"语音合成-通用"800万字符的大池子。
+DEFAULT_VOICE_TYPE = 501008  # WeJames；额度不够切 101050（WeJack）
+
 
 def _hmac_sha256(key: bytes, msg: str) -> bytes:
     return hmac.new(key, msg.encode("utf-8"), hashlib.sha256).digest()
@@ -60,7 +64,7 @@ def _authorization_header(secret_id: str, secret_key: str, payload: str, timesta
     )
 
 
-def synthesize_speech(text: str, voice_type: int = 501008) -> bytes | None:
+def synthesize_speech(text: str, voice_type: int = DEFAULT_VOICE_TYPE) -> bytes | None:
     """
     调腾讯云语音合成 API（WeJames，voice_type=501008，英文男声），返回 mp3 二进制。
     请求异常、HTTP 报错、返回内容里带 Error（未开通产品/欠费/文本过长等）
