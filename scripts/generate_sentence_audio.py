@@ -19,7 +19,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.database import SessionLocal, set_request_session  # noqa: E402
 from model.en_desktop import EnDesktopWordSentence  # noqa: E402
-from service.en_desktop.youdao import synthesize_speech  # noqa: E402
+from service.en_desktop.tencent_tts import synthesize_speech  # noqa: E402
 
 STATIC_DIR = "/lihong/static/word_sentences"
 PUBLIC_BASE_URL = "https://doctor-dog.com/static/word_sentences"
