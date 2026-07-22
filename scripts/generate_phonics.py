@@ -7,6 +7,7 @@
     .venv/bin/python scripts/generate_phonics.py                     # dry-run，处理全部缺失的词
     .venv/bin/python scripts/generate_phonics.py --limit 50          # dry-run，只处理前 50 个（小样本试跑）
     .venv/bin/python scripts/generate_phonics.py --limit 50 --apply  # 真正写库
+    .venv/bin/python scripts/generate_phonics.py --limit 20 --provider openai  # 用 OpenAI 而不是 DashScope
 
 --dry-run 是默认行为（不加 --apply 就是 dry-run），跟 rebuild_roots_affixes.py 的约定一致。
 """
@@ -19,7 +20,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from app.database import SessionLocal, set_request_session  # noqa: E402
 from model.en_desktop import EnDesktopWord, EnDesktopWordPhonics  # noqa: E402
 from service.en_desktop.phonics import validate_segments  # noqa: E402
-from service.en_desktop.phonics_llm import request_phonics_segments  # noqa: E402
+import service.en_desktop.phonics_llm as dashscope_provider  # noqa: E402
+import service.en_desktop.phonics_openai as openai_provider  # noqa: E402
+
+PROVIDERS = {"dashscope": dashscope_provider, "openai": openai_provider}
 
 
 def main():
@@ -28,7 +32,11 @@ def main():
         "--limit", type=int, default=None, help="只处理前 N 个缺失拼读数据的词，用于小样本试跑"
     )
     parser.add_argument("--apply", action="store_true", help="真正写库，不加则只是 dry-run")
+    parser.add_argument(
+        "--provider", choices=list(PROVIDERS), default="dashscope", help="用哪家 LLM 生成拆分"
+    )
     args = parser.parse_args()
+    request_phonics_segments = PROVIDERS[args.provider].request_phonics_segments
 
     session = SessionLocal()
     set_request_session(session)
