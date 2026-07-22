@@ -30,6 +30,18 @@ def test_tokenize_ipa_unknown_symbol_returns_none():
     assert tokenize_ipa("/k@t/") is None
 
 
+def test_tokenize_ipa_handles_reduced_final_i_vowel():
+    """有道音标用裸 i（无长音符）表示弱读结尾元音，比如 happy/accuracy 结尾的 i，
+    跟长元音 iː、短元音 ɪ 都不是一回事，必须单独收进音素清单"""
+    assert tokenize_ipa("/əˈkædəmi/") == ["ə", "k", "æ", "d", "ə", "m", "i"]
+    assert tokenize_ipa("/ˈæktʃuəli/") == ["æ", "k", "tʃ", "u", "ə", "l", "i"]
+
+
+def test_tokenize_ipa_handles_ipa_script_g():
+    """有道音标用标准 IPA 的 script g（U+0261 ɡ），不是 ASCII 字母 g（U+0067）"""
+    assert tokenize_ipa("/əˈɡen/") == ["ə", "ɡ", "e", "n"]
+
+
 def test_validate_segments_valid():
     segments = [{"letters": "c", "ipa": "k"}, {"letters": "a", "ipa": "æ"}, {"letters": "t", "ipa": "t"}]
     assert validate_segments("cat", "/kæt/", segments) is True
