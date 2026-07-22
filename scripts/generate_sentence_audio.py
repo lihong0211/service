@@ -9,7 +9,11 @@
     .venv/bin/python scripts/generate_sentence_audio.py --limit 20 --apply  # 真正生成文件+写库
 
 --dry-run 是默认行为（不加 --apply 就是 dry-run），跟 generate_phonics.py 的约定一致。
-必须在服务器上跑（SSH 上去）：mp3 要落在服务器本地磁盘的 STATIC_DIR，本地没有这个路径。
+
+落地路径和对外 URL 默认指向生产服务器（要 SSH 上去跑），本地跑（用本地数据库+本地
+uvicorn 当静态服务）可以用下面两个环境变量覆盖，跟 app/factory.py 挂载的 /static 保持一致：
+    SENTENCE_AUDIO_STATIC_DIR=/Users/xxx/service-ali/static/word_sentences
+    SENTENCE_AUDIO_PUBLIC_BASE_URL=http://localhost:3000/static/word_sentences
 """
 import argparse
 import os
@@ -21,8 +25,10 @@ from app.database import SessionLocal, set_request_session  # noqa: E402
 from model.en_desktop import EnDesktopWordSentence  # noqa: E402
 from service.en_desktop.tencent_tts import synthesize_speech  # noqa: E402
 
-STATIC_DIR = "/lihong/static/word_sentences"
-PUBLIC_BASE_URL = "https://doctor-dog.com/static/word_sentences"
+STATIC_DIR = os.environ.get("SENTENCE_AUDIO_STATIC_DIR", "/lihong/static/word_sentences")
+PUBLIC_BASE_URL = os.environ.get(
+    "SENTENCE_AUDIO_PUBLIC_BASE_URL", "https://doctor-dog.com/static/word_sentences"
+)
 
 
 def main():

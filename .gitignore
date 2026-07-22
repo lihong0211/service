@@ -51,3 +51,6 @@ nohup.out
 workspace/
 
 scripts/ecdict.csv
+
+# 本地跑 generate_sentence_audio.py 生成的例句音频（生产环境落在 /lihong/static/，不是这里）
+/static/
