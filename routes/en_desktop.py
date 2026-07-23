@@ -292,12 +292,10 @@ async def route_affixes_remove_word(request: Request):
     return _json_200(affixes_service.remove_word(body.get("affix_id"), body.get("word_id")))
 
 
-# ---------- 词库（歌单式，全部需要登录） ----------
+# ---------- 词库（歌单式，公共词库浏览不需要登录，个人词库需要登录） ----------
 @router.get("/libraries/public")
 async def route_libraries_public(authorization: str | None = Header(None)):
     user_id = _current_user_id(authorization)
-    if user_id is None:
-        return _json_200(UNAUTHORIZED)
     return _json_200(libraries_service.list_public_libraries(user_id))
 
 
@@ -329,10 +327,10 @@ async def route_libraries_unfavorite(request: Request, authorization: str | None
 
 @router.get("/libraries/list")
 async def route_libraries_list(authorization: str | None = Header(None)):
-    # 不登录时退化成浏览公共词库（不含私有词库），登录后看自己的全部词库
+    # 未登录没有"自建词库"，返回空列表；登录后看自己的全部词库
     user_id = _current_user_id(authorization)
     if user_id is None:
-        return _json_200(libraries_service.list_public_libraries(None))
+        return _json_200({"code": 200, "msg": "success", "data": []})
     return _json_200(libraries_service.list_libraries(user_id))
 
 
