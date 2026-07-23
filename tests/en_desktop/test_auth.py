@@ -181,6 +181,42 @@ def test_bind_account_merges_and_transfers_wx_mini(en_desktop_db, monkeypatch):
     assert again["data"]["user"]["id"] == target_id
 
 
+def test_bind_account_fills_in_missing_nickname_and_avatar(en_desktop_db, monkeypatch):
+    """target（桌面账号密码注册）从没设置过昵称头像；source（小程序）已经设置过——
+    合并后 target 应该拿到 source 的昵称头像，而不是保持空。"""
+    target = auth.register({"username": "alice", "password": "secret"})
+    target_id = target["data"]["user"]["id"]
+
+    monkeypatch.setattr(auth.wechat_oauth, "exchange_code_for_mini_openid", lambda code: "mini-openid-1")
+    mini = auth.mini_login({"code": "any"})
+    source_id = mini["data"]["user"]["id"]
+    auth.update_profile(source_id, {"nickname": "cdut007"})
+    EnDesktopUser.update({"id": source_id, "avatar": "https://x.test/avatar.jpg"})
+
+    result = auth.bind_account(source_id, {"username": "alice", "password": "secret"})
+    assert result["code"] == 200
+    assert result["data"]["user"]["nickname"] == "cdut007"
+    assert result["data"]["user"]["avatar"] == "https://x.test/avatar.jpg"
+
+
+def test_bind_account_keeps_targets_own_nickname_and_avatar(en_desktop_db, monkeypatch):
+    """target 已经有自己的昵称头像时，不能被 source 的覆盖掉。"""
+    target = auth.register({"username": "alice", "password": "secret"})
+    target_id = target["data"]["user"]["id"]
+    auth.update_profile(target_id, {"nickname": "桌面昵称"})
+    EnDesktopUser.update({"id": target_id, "avatar": "https://x.test/desktop-avatar.jpg"})
+
+    monkeypatch.setattr(auth.wechat_oauth, "exchange_code_for_mini_openid", lambda code: "mini-openid-1")
+    mini = auth.mini_login({"code": "any"})
+    source_id = mini["data"]["user"]["id"]
+    auth.update_profile(source_id, {"nickname": "cdut007"})
+
+    result = auth.bind_account(source_id, {"username": "alice", "password": "secret"})
+    assert result["code"] == 200
+    assert result["data"]["user"]["nickname"] == "桌面昵称"
+    assert result["data"]["user"]["avatar"] == "https://x.test/desktop-avatar.jpg"
+
+
 def test_bind_account_wrong_password(en_desktop_db, monkeypatch):
     auth.register({"username": "alice", "password": "secret"})
     monkeypatch.setattr(auth.wechat_oauth, "exchange_code_for_mini_openid", lambda code: "mini-openid-1")

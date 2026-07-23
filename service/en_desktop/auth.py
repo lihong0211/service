@@ -204,6 +204,13 @@ def bind_account(user_id: int, data: dict) -> dict:
         source = EnDesktopUser.get_by_id(user_id)
         account_merge.merge_libraries_and_favorites(source.id, target.id)
 
+        # target 没设置过昵称/头像时，用 source 的补上（比如小程序端已经填过资料，
+        # 桌面账号只是纯用户名密码注册，昵称头像全是空的）；target 已有的不覆盖
+        if not target.nickname and source.nickname:
+            target.nickname = source.nickname
+        if not target.avatar and source.avatar:
+            target.avatar = source.avatar
+
         # 必须先清空 source.wx_mini 并 flush，再给 target 赋值——wx_mini 有唯一索引，
         # autoflush=False 不会在两条 UPDATE 之间自动排序，反过来做会在 flush 时撞唯一约束
         source_wx_mini = source.wx_mini
