@@ -103,3 +103,20 @@ def test_wechat_login_error(en_desktop_db, monkeypatch):
     assert result["msg"] == "invalid code"
 
     assert auth.wechat_login({})["code"] == 400
+
+
+def test_update_profile_success(en_desktop_db):
+    result = auth.register({"username": "alice", "password": "secret"})
+    user_id = result["data"]["user"]["id"]
+
+    updated = auth.update_profile(user_id, {"nickname": "新昵称"})
+    assert updated["code"] == 200
+    assert updated["data"]["nickname"] == "新昵称"
+
+
+def test_update_profile_validates_length(en_desktop_db):
+    result = auth.register({"username": "alice", "password": "secret"})
+    user_id = result["data"]["user"]["id"]
+
+    assert auth.update_profile(user_id, {"nickname": ""})["code"] == 400
+    assert auth.update_profile(user_id, {"nickname": "a" * 51})["code"] == 400

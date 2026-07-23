@@ -145,3 +145,16 @@ def me(token: str | None) -> dict:
         return {"code": 200, "msg": "success", "data": user.public_dict()}
     except Exception as e:
         return unexpected_error_response(e, db.session)
+
+
+def update_profile(user_id: int, data: dict) -> dict:
+    """更新当前用户昵称"""
+    nickname = (data.get("nickname") or "").strip()
+    if not 1 <= len(nickname) <= 50:
+        return {"code": 400, "msg": "昵称长度需在1-50个字符"}
+
+    try:
+        EnDesktopUser.update({"id": user_id, "nickname": nickname})
+        return {"code": 200, "msg": "success", "data": EnDesktopUser.get_by_id(user_id).public_dict()}
+    except Exception as e:
+        return unexpected_error_response(e, db.session)

@@ -71,6 +71,14 @@ async def route_auth_me(authorization: str | None = Header(None)):
     return _json_200(auth_service.me(_bearer_token(authorization)))
 
 
+@router.post("/auth/profile")
+async def route_auth_profile(request: Request, authorization: str | None = Header(None)):
+    user_id = _current_user_id(authorization)
+    if user_id is None:
+        return _json_200(UNAUTHORIZED)
+    return _json_200(auth_service.update_profile(user_id, await _body(request)))
+
+
 # ---------- 用户 ----------
 @router.get("/users/list")
 async def route_users_list(
