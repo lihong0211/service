@@ -18,6 +18,7 @@ uvicorn 当静态服务）可以用下面两个环境变量覆盖，跟 app/fact
 import argparse
 import os
 import sys
+from concurrent.futures import ThreadPoolExecutor
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -37,7 +38,12 @@ def main():
         "--limit", type=int, default=None, help="只处理前 N 条缺音频的例句，用于小样本试跑"
     )
     parser.add_argument("--apply", action="store_true", help="真正生成文件+写库，不加则只是 dry-run")
+    parser.add_argument(
+        "--workers", type=int, default=1, help="并发 TTS 请求数；数据库写入仍在主线程执行"
+    )
     args = parser.parse_args()
+    if args.workers < 1:
+        parser.error("--workers 必须大于等于 1")
 
     session = SessionLocal()
     set_request_session(session)
@@ -55,23 +61,34 @@ def main():
     if args.apply:
         os.makedirs(STATIC_DIR, exist_ok=True)
 
+    items = [(s.id, s.en_text) for s in todo]
+
+    def synthesize(item):
+        sentence_id, en_text = item
+        return sentence_id, en_text, synthesize_speech(en_text)
+
+    executor = ThreadPoolExecutor(max_workers=args.workers) if args.workers > 1 else None
+    results = executor.map(synthesize, items) if executor else map(synthesize, items)
+
     stats = {"success": 0, "failed": 0}
-    for s in todo:
-        audio = synthesize_speech(s.en_text)
+    for sentence_id, en_text, audio in results:
         if audio is None:
-            print(f"跳过 #{s.id}：TTS 调用失败，例句「{s.en_text}」")
+            print(f"跳过 #{sentence_id}：TTS 调用失败，例句「{en_text}」")
             stats["failed"] += 1
             continue
 
-        audio_url = f"{PUBLIC_BASE_URL}/{s.id}.mp3"
+        audio_url = f"{PUBLIC_BASE_URL}/{sentence_id}.mp3"
         tag = "[APPLY]" if args.apply else "[DRY-RUN]"
-        print(f"{tag} #{s.id} 「{s.en_text}」 -> {audio_url}")
+        print(f"{tag} #{sentence_id} 「{en_text}」 -> {audio_url}")
         if args.apply:
-            file_path = os.path.join(STATIC_DIR, f"{s.id}.mp3")
+            file_path = os.path.join(STATIC_DIR, f"{sentence_id}.mp3")
             with open(file_path, "wb") as f:
                 f.write(audio)
-            EnDesktopWordSentence.update({"id": s.id, "audio_url": audio_url})
+            EnDesktopWordSentence.update({"id": sentence_id, "audio_url": audio_url})
         stats["success"] += 1
+
+    if executor:
+        executor.shutdown()
 
     print(f"\n完成：成功 {stats['success']}，跳过(TTS失败) {stats['failed']}")
 
