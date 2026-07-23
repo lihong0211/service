@@ -91,6 +91,14 @@ async def route_auth_avatar(
     return _json_200(avatar_service.save_avatar(user_id, content))
 
 
+@router.post("/auth/set-credentials")
+async def route_auth_set_credentials(request: Request, authorization: str | None = Header(None)):
+    user_id = _current_user_id(authorization)
+    if user_id is None:
+        return _json_200(UNAUTHORIZED)
+    return _json_200(auth_service.set_credentials(user_id, await _body(request)))
+
+
 # ---------- 用户 ----------
 @router.get("/users/list")
 async def route_users_list(

@@ -120,3 +120,33 @@ def test_update_profile_validates_length(en_desktop_db):
 
     assert auth.update_profile(user_id, {"nickname": ""})["code"] == 400
     assert auth.update_profile(user_id, {"nickname": "a" * 51})["code"] == 400
+
+
+def test_set_credentials_success(en_desktop_db, monkeypatch):
+    monkeypatch.setattr(auth.wechat_oauth, "exchange_code_for_mini_openid", lambda code: "mini-openid-1")
+    mini = auth.mini_login({"code": "any"})
+    user_id = mini["data"]["user"]["id"]
+
+    result = auth.set_credentials(user_id, {"username": "bob", "password": "secret"})
+    assert result["code"] == 200
+    assert result["data"]["username"] == "bob"
+    assert result["data"]["wx_mini"] == "mini-openid-1"
+
+
+def test_set_credentials_rejects_duplicate_username(en_desktop_db, monkeypatch):
+    auth.register({"username": "bob", "password": "secret"})
+    monkeypatch.setattr(auth.wechat_oauth, "exchange_code_for_mini_openid", lambda code: "mini-openid-1")
+    mini = auth.mini_login({"code": "any"})
+    user_id = mini["data"]["user"]["id"]
+
+    result = auth.set_credentials(user_id, {"username": "bob", "password": "other"})
+    assert result["code"] == 400
+
+
+def test_set_credentials_rejects_when_already_set(en_desktop_db):
+    result = auth.register({"username": "alice", "password": "secret"})
+    user_id = result["data"]["user"]["id"]
+
+    result = auth.set_credentials(user_id, {"username": "new-name", "password": "secret2"})
+    assert result["code"] == 400
+    assert "已设置" in result["msg"]

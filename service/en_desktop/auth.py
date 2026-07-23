@@ -158,3 +158,28 @@ def update_profile(user_id: int, data: dict) -> dict:
         return {"code": 200, "msg": "success", "data": EnDesktopUser.get_by_id(user_id).public_dict()}
     except Exception as e:
         return unexpected_error_response(e, db.session)
+
+
+def set_credentials(user_id: int, data: dict) -> dict:
+    """给当前（一般是匿名 wx_mini）账号直接设置用户名密码，不新建行、不改 token。
+    仅当当前账号还没有 username 时可用——已经设置过就必须走 bind_account 合并。"""
+    username = (data.get("username") or "").strip()
+    password = data.get("password") or ""
+    if not 1 <= len(username) <= 20:
+        return {"code": 400, "msg": "用户名长度需在1-20个字符"}
+    if not 3 <= len(password) <= 100:
+        return {"code": 400, "msg": "密码长度需在3-100个字符"}
+
+    try:
+        user = EnDesktopUser.get_by_id(user_id)
+        if user.username:
+            return {"code": 400, "msg": "当前账号已设置用户名"}
+        if EnDesktopUser.select_one_by({"username": username}):
+            return {"code": 400, "msg": "用户名已存在"}
+
+        EnDesktopUser.update(
+            {"id": user_id, "username": username, "password": hash_password(password)}
+        )
+        return {"code": 200, "msg": "success", "data": EnDesktopUser.get_by_id(user_id).public_dict()}
+    except Exception as e:
+        return unexpected_error_response(e, db.session)
