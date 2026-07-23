@@ -2,6 +2,8 @@
 """
 en-desktop 单词服务：CRUD + 查词（词典 API + 有道翻译）
 """
+from typing import Callable
+
 from app.database import db
 from app.errors import unexpected_error_response
 from model.en_desktop import EnDesktopWord, EnDesktopWordMeaning
@@ -73,11 +75,19 @@ def get_word(word_id: int) -> dict:
         return unexpected_error_response(e, db.session)
 
 
-def add_word(data: dict, user_id: int | None = None) -> dict:
+def add_word(
+    data: dict,
+    user_id: int | None = None,
+    on_new_meanings: Callable[[list[int]], None] | None = None,
+) -> dict:
     """
     创建单词。可选 library_id（数字 ID 或 "default"=默认收藏）：
     单词入全局表的同时加进该词库（已存在的单词只加词库，幂等），需要登录。
     不传 library_id 时行为与原桌面端后端一致。
+
+    on_new_meanings：仅当这次是全新单词（不是已存在单词只是加词库）时，用新插入的
+    word_meaning id 列表回调一次，不影响返回给调用方的响应内容——调用方（路由层）拿这个
+    去挂 BackgroundTasks 触发例句自动生成，跟单词是否创建成功这件事完全解耦。
     """
     word_text = (data.get("word") or "").strip()
     en_pronunciation = data.get("en_pronunciation") or ""
@@ -97,6 +107,7 @@ def add_word(data: dict, user_id: int | None = None) -> dict:
         if existing and not library_id:
             return {"code": 500, "msg": "单词已存在"}
 
+        is_new_word = existing is None
         if existing:
             word_id = existing.id
         else:
@@ -120,6 +131,11 @@ def add_word(data: dict, user_id: int | None = None) -> dict:
             libraries_service.add_item(library_id, word_id)
 
         db.session.commit()
+
+        if is_new_word and on_new_meanings:
+            new_meaning_ids = [m.id for m in EnDesktopWordMeaning.select_by({"word_id": word_id})]
+            if new_meaning_ids:
+                on_new_meanings(new_meaning_ids)
 
         return {
             "code": 200,

@@ -1,0 +1,18 @@
+# service-ali 的 frp 内网穿透配置（参考副本）
+#
+# 实际生效的 frpc 进程读的是 service-home/frpc.toml（一个 frpc 进程管所有代理），
+# 这份文件放在 service-ali 仓库里只是方便查看本项目对应的穿透配置，
+# 不要单独拿这份文件去起第二个 frpc 进程（会跟正在跑的那个抢注册、造成冲突）。
+#
+# 访问方式：https://home.doctor-dog.com/ali/* -> nginx -> 127.0.0.1:5000 -> 本条代理 -> 本机 3000
+
+serverAddr = "8.137.107.171"
+serverPort = 7000
+auth.token = "lihong0211"
+
+[[proxies]]
+name = "ali-3000"
+type = "tcp"
+localIP = "127.0.0.1"
+localPort = 3000
+remotePort = 5000

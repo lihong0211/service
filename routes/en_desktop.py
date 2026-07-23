@@ -6,7 +6,7 @@ en-desktop 模块路由（记单词桌面客户端后端）
 成功回调里检查 body.code（401 触发重新登录），业务错误映射成 4xx/5xx
 会直接走进 axios 的 reject 分支，破坏客户端既有契约。
 """
-from fastapi import APIRouter, Header, Query, Request
+from fastapi import APIRouter, BackgroundTasks, Header, Query, Request
 from fastapi.responses import JSONResponse
 
 from service.en_desktop import affixes as affixes_service
@@ -14,6 +14,7 @@ from service.en_desktop import auth as auth_service
 from service.en_desktop import daily_expressions as daily_expressions_service
 from service.en_desktop import libraries as libraries_service
 from service.en_desktop import roots as roots_service
+from service.en_desktop import sentences as sentences_service
 from service.en_desktop import users as users_service
 from service.en_desktop import words as words_service
 
@@ -124,11 +125,20 @@ async def route_words_get(word_id: int):
 
 
 @router.post("/words/add")
-async def route_words_add(request: Request, authorization: str | None = Header(None)):
+async def route_words_add(
+    request: Request, background_tasks: BackgroundTasks, authorization: str | None = Header(None)
+):
     # user_id 可选：body 带 library_id（收藏进词库）时才要求登录
-    return _json_200(
-        words_service.add_word(await _body(request), user_id=_current_user_id(authorization))
+    new_meaning_ids: list[int] = []
+    result = words_service.add_word(
+        await _body(request),
+        user_id=_current_user_id(authorization),
+        on_new_meanings=new_meaning_ids.extend,
     )
+    # 新词落库成功后才补例句：响应先返回，例句+音频生成放到后台跑，不拖慢"新增单词"这个操作
+    for meaning_id in new_meaning_ids:
+        background_tasks.add_task(sentences_service.generate_and_attach_sentence, meaning_id)
+    return _json_200(result)
 
 
 @router.post("/words/lookup")
