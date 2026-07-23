@@ -6,11 +6,12 @@ en-desktop 模块路由（记单词桌面客户端后端）
 成功回调里检查 body.code（401 触发重新登录），业务错误映射成 4xx/5xx
 会直接走进 axios 的 reject 分支，破坏客户端既有契约。
 """
-from fastapi import APIRouter, BackgroundTasks, Header, Query, Request
+from fastapi import APIRouter, BackgroundTasks, File, Header, Query, Request, UploadFile
 from fastapi.responses import JSONResponse
 
 from service.en_desktop import affixes as affixes_service
 from service.en_desktop import auth as auth_service
+from service.en_desktop import avatar as avatar_service
 from service.en_desktop import daily_expressions as daily_expressions_service
 from service.en_desktop import libraries as libraries_service
 from service.en_desktop import roots as roots_service
@@ -77,6 +78,17 @@ async def route_auth_profile(request: Request, authorization: str | None = Heade
     if user_id is None:
         return _json_200(UNAUTHORIZED)
     return _json_200(auth_service.update_profile(user_id, await _body(request)))
+
+
+@router.post("/auth/avatar")
+async def route_auth_avatar(
+    file: UploadFile = File(...), authorization: str | None = Header(None)
+):
+    user_id = _current_user_id(authorization)
+    if user_id is None:
+        return _json_200(UNAUTHORIZED)
+    content = await file.read()
+    return _json_200(avatar_service.save_avatar(user_id, content))
 
 
 # ---------- 用户 ----------
