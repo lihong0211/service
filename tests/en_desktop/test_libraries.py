@@ -295,3 +295,32 @@ def test_library_words_meaning_without_sentence_is_none(user_id):
     result = libraries.library_words(user_id, lib_id)
     word = result["data"]["list"][0]
     assert word["meaning"][0]["sentence"] is None
+
+
+def test_library_words_favorited_flag_reflects_default_library(user_id):
+    word_id = _add_word("cherry")
+    default_lib = next(
+        lib
+        for lib in libraries.list_libraries(user_id)["data"]
+        if lib["name"] == DEFAULT_LIBRARY_NAME
+    )
+    other_lib_id = libraries.add_library(user_id, {"name": "水果"})["data"]["id"]
+    libraries.add_item(other_lib_id, word_id)
+
+    result = libraries.library_words(user_id, other_lib_id)
+    assert result["data"]["list"][0]["favorited"] is False
+
+    libraries.add_item(default_lib["id"], word_id)
+    result = libraries.library_words(user_id, other_lib_id)
+    assert result["data"]["list"][0]["favorited"] is True
+
+
+def test_library_words_favorited_flag_false_when_unauthenticated(user_id):
+    word_id = _add_word("date")
+    pub_lib_id = libraries.add_library(
+        user_id, {"name": "公共词库", "is_public": True}
+    )["data"]["id"]
+    libraries.add_item(pub_lib_id, word_id)
+
+    result = libraries.library_words(None, pub_lib_id)
+    assert result["data"]["list"][0]["favorited"] is False

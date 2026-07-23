@@ -123,6 +123,23 @@ def _favorited_ids(user_id: int) -> set:
     return {f.word_library_id for f in favs}
 
 
+def _favorited_word_ids(user_id: int | None, word_ids: list) -> set:
+    """word_id 是否在当前用户"默认收藏"词库里；未登录或无待查词时直接返回空集"""
+    if not user_id or not word_ids:
+        return set()
+    default_lib = ensure_default_library(user_id)
+    rows = (
+        db.session.query(EnDesktopWordLibraryItem.word_id)
+        .where(
+            EnDesktopWordLibraryItem.word_library_id == default_lib.id,
+            EnDesktopWordLibraryItem.word_id.in_(word_ids),
+            EnDesktopWordLibraryItem.deleted_at.is_(None),
+        )
+        .all()
+    )
+    return {r[0] for r in rows}
+
+
 def list_public_libraries(user_id: int | None) -> dict:
     """公共（系统）词库列表，不登录也可浏览；favorited 标记当前用户是否已收藏（未登录恒为 False）"""
     try:
@@ -324,12 +341,17 @@ def library_words(
 
         page_words = [word for _, word in rows]
         meanings_by_word = _meanings_grouped([w.id for w in page_words])
+        favorited_word_ids = _favorited_word_ids(user_id, [w.id for w in page_words])
         return {
             "code": 200,
             "msg": "success",
             "data": {
                 "list": [
-                    w.to_dict(meaning=meanings_by_word.get(w.id, [])) for w in page_words
+                    {
+                        **w.to_dict(meaning=meanings_by_word.get(w.id, [])),
+                        "favorited": w.id in favorited_word_ids,
+                    }
+                    for w in page_words
                 ],
                 "total": total,
                 "page": page,
