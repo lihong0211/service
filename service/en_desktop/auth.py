@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 from app.database import db
 from app.errors import unexpected_error_response
 from model.en_desktop import EnDesktopUser
-from service.en_desktop import wechat_oauth
+from service.en_desktop import account_merge, wechat_oauth
 from service.en_desktop.security import generate_token, hash_password, verify_password
 
 TOKEN_VALID_DAYS = 30
@@ -181,5 +181,39 @@ def set_credentials(user_id: int, data: dict) -> dict:
             {"id": user_id, "username": username, "password": hash_password(password)}
         )
         return {"code": 200, "msg": "success", "data": EnDesktopUser.get_by_id(user_id).public_dict()}
+    except Exception as e:
+        return unexpected_error_response(e, db.session)
+
+
+def bind_account(user_id: int, data: dict) -> dict:
+    """把当前（一般是匿名 wx_mini）账号合并进已有的账号密码账号：迁移词库/收藏，
+    wx_mini 过户给目标账号，源记录软删。合并后无论静默登录还是重新登录，wx_mini
+    都指向目标账号，天然是同一个身份，requestDesktop.js/mini_login/me 都不用改。"""
+    username = (data.get("username") or "").strip()
+    password = data.get("password") or ""
+    if not username or not password:
+        return {"code": 400, "msg": "请输入用户名和密码"}
+
+    try:
+        target = EnDesktopUser.select_one_by({"username": username})
+        if not target or not target.password or not verify_password(password, target.password):
+            return {"code": 400, "msg": "用户名或密码错误"}
+        if target.id == user_id:
+            return {"code": 400, "msg": "不能绑定自己"}
+
+        source = EnDesktopUser.get_by_id(user_id)
+        account_merge.merge_libraries_and_favorites(source.id, target.id)
+
+        # 必须先清空 source.wx_mini 并 flush，再给 target 赋值——wx_mini 有唯一索引，
+        # autoflush=False 不会在两条 UPDATE 之间自动排序，反过来做会在 flush 时撞唯一约束
+        source_wx_mini = source.wx_mini
+        source.wx_mini = None
+        db.session.flush()
+        target.wx_mini = source_wx_mini
+
+        EnDesktopUser.delete(source.id, commit=False)
+        db.session.commit()
+
+        return _auth_success(target.id)
     except Exception as e:
         return unexpected_error_response(e, db.session)

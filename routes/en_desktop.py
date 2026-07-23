@@ -99,6 +99,14 @@ async def route_auth_set_credentials(request: Request, authorization: str | None
     return _json_200(auth_service.set_credentials(user_id, await _body(request)))
 
 
+@router.post("/auth/bind-account")
+async def route_auth_bind_account(request: Request, authorization: str | None = Header(None)):
+    user_id = _current_user_id(authorization)
+    if user_id is None:
+        return _json_200(UNAUTHORIZED)
+    return _json_200(auth_service.bind_account(user_id, await _body(request)))
+
+
 # ---------- 用户 ----------
 @router.get("/users/list")
 async def route_users_list(

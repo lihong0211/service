@@ -3,7 +3,7 @@ en-desktop 认证服务测试
 """
 from datetime import datetime, timedelta
 
-from model.en_desktop import EnDesktopUser
+from model.en_desktop import EnDesktopUser, EnDesktopWordLibrary
 from service.en_desktop import auth
 
 
@@ -150,3 +150,50 @@ def test_set_credentials_rejects_when_already_set(en_desktop_db):
     result = auth.set_credentials(user_id, {"username": "new-name", "password": "secret2"})
     assert result["code"] == 400
     assert "已设置" in result["msg"]
+
+
+def test_bind_account_merges_and_transfers_wx_mini(en_desktop_db, monkeypatch):
+    target = auth.register({"username": "alice", "password": "secret"})
+    target_id = target["data"]["user"]["id"]
+
+    monkeypatch.setattr(auth.wechat_oauth, "exchange_code_for_mini_openid", lambda code: "mini-openid-1")
+    mini = auth.mini_login({"code": "any"})
+    source_id = mini["data"]["user"]["id"]
+
+    EnDesktopWordLibrary.insert({"user_id": source_id, "name": "自建库A"})
+
+    result = auth.bind_account(source_id, {"username": "alice", "password": "secret"})
+    assert result["code"] == 200
+    assert result["data"]["user"]["id"] == target_id
+    assert result["data"]["user"]["wx_mini"] == "mini-openid-1"
+    new_token = result["data"]["token"]
+
+    # 源记录已被软删
+    assert EnDesktopUser.get_by_id(source_id) is None
+    # 词库已过户
+    lib = EnDesktopWordLibrary.select_one_by({"user_id": target_id, "name": "自建库A"})
+    assert lib is not None
+
+    # 之后不管是这个新 token，还是重新静默登录，解析到的都是合并后的 target 账号
+    assert auth.me(new_token)["code"] == 200
+    assert auth.me(new_token)["data"]["id"] == target_id
+    again = auth.mini_login({"code": "any"})
+    assert again["data"]["user"]["id"] == target_id
+
+
+def test_bind_account_wrong_password(en_desktop_db, monkeypatch):
+    auth.register({"username": "alice", "password": "secret"})
+    monkeypatch.setattr(auth.wechat_oauth, "exchange_code_for_mini_openid", lambda code: "mini-openid-1")
+    mini = auth.mini_login({"code": "any"})
+    source_id = mini["data"]["user"]["id"]
+
+    result = auth.bind_account(source_id, {"username": "alice", "password": "wrong"})
+    assert result["code"] == 400
+
+
+def test_bind_account_rejects_self(en_desktop_db):
+    result = auth.register({"username": "alice", "password": "secret"})
+    user_id = result["data"]["user"]["id"]
+
+    result = auth.bind_account(user_id, {"username": "alice", "password": "secret"})
+    assert result["code"] == 400
