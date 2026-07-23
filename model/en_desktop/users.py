@@ -19,8 +19,10 @@ class EnDesktopUser(BaseEnDesktop, EnDesktopModel):
     phone = Column(String(11), index=True, nullable=True)
     description = Column(String(255), nullable=True)
     active = Column(Integer, default=1, comment="1激活 0禁用")
-    token = Column(String(64), unique=True, index=True, nullable=True, comment="登录令牌，单设备在线")
+    token = Column(String(64), unique=True, index=True, nullable=True, comment="登录令牌（桌面端/网页扫码），单设备在线")
     token_expires_at = Column(DateTime(), nullable=True)
+    mini_token = Column(String(64), unique=True, index=True, nullable=True, comment="登录令牌（en-mini 小程序），跟桌面端 token 独立，互不顶替")
+    mini_token_expires_at = Column(DateTime(), nullable=True)
 
     def public_dict(self) -> dict:
         """对外输出，绝不包含 password/token"""

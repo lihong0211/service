@@ -93,6 +93,38 @@ def test_wechat_login_creates_and_updates_user(en_desktop_db, monkeypatch):
     assert len(EnDesktopUser.select_by({"wx": "openid-1"})) == 1
 
 
+def test_desktop_and_mini_login_use_independent_tokens(en_desktop_db, monkeypatch):
+    """绑定后桌面端和小程序是同一条用户记录，但登录令牌必须互相独立——
+    这边重新登录一次，不能把那边正在用的 token 顶掉。"""
+    target = auth.register({"username": "alice", "password": "secret"})
+    target_id = target["data"]["user"]["id"]
+
+    monkeypatch.setattr(auth.wechat_oauth, "exchange_code_for_mini_openid", lambda code: "mini-openid-1")
+    mini = auth.mini_login({"code": "any"})
+    source_id = mini["data"]["user"]["id"]
+    bound = auth.bind_account(source_id, {"username": "alice", "password": "secret"})
+    mini_token = bound["data"]["token"]
+    assert auth.me(mini_token)["code"] == 200
+
+    # 桌面端重新登录一次
+    desktop_login = auth.login({"username": "alice", "password": "secret"})
+    desktop_token = desktop_login["data"]["token"]
+    assert desktop_token != mini_token
+
+    # 两个 token 都还能用，谁也没把谁顶掉
+    assert auth.me(mini_token)["code"] == 200
+    assert auth.me(mini_token)["data"]["id"] == target_id
+    assert auth.me(desktop_token)["code"] == 200
+    assert auth.me(desktop_token)["data"]["id"] == target_id
+
+    # 小程序静默重新登录一次，也不该影响桌面端刚拿到的 token
+    again_mini = auth.mini_login({"code": "any"})
+    new_mini_token = again_mini["data"]["token"]
+    assert new_mini_token != mini_token
+    assert auth.me(desktop_token)["code"] == 200
+    assert auth.me(new_mini_token)["code"] == 200
+
+
 def test_wechat_login_error(en_desktop_db, monkeypatch):
     def boom(code):
         raise RuntimeError("invalid code")

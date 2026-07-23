@@ -1,7 +1,9 @@
 # service/en_desktop/auth.py
 """
 en-desktop 认证服务：账号密码注册/登录 + 微信扫码登录 + token 签发校验。
-token 存 users 表（单设备在线），30 天有效，与桌面客户端既有契约一致。
+token 存 users 表，30 天有效，与桌面客户端既有契约一致。桌面端/网页扫码（token 列）
+和小程序（mini_token 列）各用各的令牌槽位：账号绑定打通后两边可能是同一条用户记录，
+如果共用一个槽位，谁登录谁会把对方的 token 顶掉，互相挤下线。
 """
 from datetime import datetime, timedelta
 
@@ -14,21 +16,23 @@ from service.en_desktop.security import generate_token, hash_password, verify_pa
 TOKEN_VALID_DAYS = 30
 
 
-def _issue_token(user: EnDesktopUser) -> str:
+def _issue_token(user: EnDesktopUser, field: str = "token") -> str:
+    """field='token' 签发桌面端/网页扫码令牌，field='mini_token' 签发小程序令牌，
+    两个槽位互不影响。"""
     token = generate_token()
     EnDesktopUser.update(
         {
             "id": user.id,
-            "token": token,
-            "token_expires_at": datetime.now() + timedelta(days=TOKEN_VALID_DAYS),
+            field: token,
+            f"{field}_expires_at": datetime.now() + timedelta(days=TOKEN_VALID_DAYS),
         }
     )
     return token
 
 
-def _auth_success(user_id: int) -> dict:
+def _auth_success(user_id: int, field: str = "token") -> dict:
     user = EnDesktopUser.get_by_id(user_id)
-    token = _issue_token(user)
+    token = _issue_token(user, field=field)
     return {
         "code": 200,
         "msg": "success",
@@ -119,19 +123,25 @@ def mini_login(data: dict) -> dict:
             user_id = EnDesktopUser.insert({"wx_mini": openid, "nickname": "微信用户"})
         else:
             user_id = user.id
-        return _auth_success(user_id)
+        return _auth_success(user_id, field="mini_token")
     except Exception as e:
         return unexpected_error_response(e, db.session)
 
 
 def resolve_user_by_token(token: str | None) -> EnDesktopUser | None:
-    """按 token 查用户并校验有效期，无效返回 None"""
+    """按 token 查用户并校验有效期，无效返回 None；token/mini_token 两个槽位都会查，
+    因为 /auth/me 这类接口是桌面端和小程序共用的，从 token 本身看不出是哪个客户端发的"""
     if not token:
         return None
     user = EnDesktopUser.select_one_by({"token": token})
+    expires_at_field = "token_expires_at"
+    if not user:
+        user = EnDesktopUser.select_one_by({"mini_token": token})
+        expires_at_field = "mini_token_expires_at"
     if not user:
         return None
-    if user.token_expires_at and user.token_expires_at < datetime.now():
+    expires_at = getattr(user, expires_at_field)
+    if expires_at and expires_at < datetime.now():
         return None
     return user
 
@@ -221,6 +231,6 @@ def bind_account(user_id: int, data: dict) -> dict:
         EnDesktopUser.delete(source.id, commit=False)
         db.session.commit()
 
-        return _auth_success(target.id)
+        return _auth_success(target.id, field="mini_token")
     except Exception as e:
         return unexpected_error_response(e, db.session)
