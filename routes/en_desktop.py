@@ -151,8 +151,10 @@ async def route_words_list(
     page: int = Query(1, description="页码，从1开始"),
     page_size: int = Query(10, description="每页记录数", le=10000),
     search: str | None = Query(None, description="按单词模糊搜索"),
+    authorization: str | None = Header(None),
 ):
-    return _json_200(words_service.list_words(page, page_size, search))
+    user_id = _current_user_id(authorization)
+    return _json_200(words_service.list_words(page, page_size, search, user_id))
 
 
 @router.get("/words/{word_id}")
@@ -178,8 +180,17 @@ async def route_words_add(
 
 
 @router.post("/words/lookup")
-async def route_words_lookup(request: Request):
-    return _json_200(words_service.lookup(await _body(request)))
+async def route_words_lookup(request: Request, authorization: str | None = Header(None)):
+    user_id = _current_user_id(authorization)
+    return _json_200(words_service.lookup(await _body(request), user_id))
+
+
+@router.post("/words/remove-from-library")
+async def route_words_remove_from_library(
+    request: Request, authorization: str | None = Header(None)
+):
+    user_id = _current_user_id(authorization)
+    return _json_200(words_service.remove_from_library(await _body(request), user_id))
 
 
 @router.post("/words/update")

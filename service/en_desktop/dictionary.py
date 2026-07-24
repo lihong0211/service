@@ -4,6 +4,7 @@
 """
 import requests
 
+from service.en_desktop.phonics_llm import request_ipa_pronunciation
 from service.en_desktop.youdao import translate_to_chinese
 
 FREE_DICTIONARY_API_URL = "https://api.dictionaryapi.dev/api/v2/entries/en/{word}"
@@ -80,6 +81,20 @@ def lookup_word(word: str) -> dict | None:
 
     en_pronunciation = _pick_pronunciation(phonetics, "-uk") or fallback
     us_pronunciation = _pick_pronunciation(phonetics, "-us") or fallback
+
+    # 词典查不到任何文本音标（比如只有音频没有 IPA）时当场用 LLM 兜底一次，
+    # 跟离线批处理脚本（scripts/normalize_phonetics.py）的兜底逻辑保持一致，
+    # 不用等下次批处理才补上；LLM 也失败就保留 "-" 占位符
+    if en_pronunciation == "-" or us_pronunciation == "-":
+        try:
+            llm_ipa = request_ipa_pronunciation(word)
+        except RuntimeError:
+            llm_ipa = None
+        if llm_ipa:
+            if en_pronunciation == "-":
+                en_pronunciation = llm_ipa
+            if us_pronunciation == "-":
+                us_pronunciation = llm_ipa
 
     meaning = []
     for m in entry.get("meanings", []):

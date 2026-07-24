@@ -35,8 +35,11 @@ def _replace_meanings(word_id: int, meaning: list) -> None:
         )
 
 
-def list_words(page: int = 1, page_size: int = 10, search: str | None = None) -> dict:
-    """分页返回 {list, total, page, page_size}；search 按单词模糊匹配"""
+def list_words(
+    page: int = 1, page_size: int = 10, search: str | None = None, user_id: int | None = None
+) -> dict:
+    """分页返回 {list, total, page, page_size}；search 按单词模糊匹配。
+    登录时每个词条带 favorited：是否已在当前用户的"默认收藏"里（未登录恒为 False）"""
     try:
         query = db.session.query(EnDesktopWord).where(EnDesktopWord.deleted_at.is_(None))
         if search:
@@ -51,11 +54,20 @@ def list_words(page: int = 1, page_size: int = 10, search: str | None = None) ->
 
         # 批量取释义，避免几千词时的 N+1 查询
         meanings_by_word = _meanings_grouped([w.id for w in page_words])
+        favorited_word_ids = libraries_service._favorited_word_ids(
+            user_id, [w.id for w in page_words]
+        )
         return {
             "code": 200,
             "msg": "success",
             "data": {
-                "list": [w.to_dict(meaning=meanings_by_word.get(w.id, [])) for w in page_words],
+                "list": [
+                    {
+                        **w.to_dict(meaning=meanings_by_word.get(w.id, [])),
+                        "favorited": w.id in favorited_word_ids,
+                    }
+                    for w in page_words
+                ],
                 "total": total,
                 "page": page,
                 "page_size": page_size,
@@ -81,7 +93,7 @@ def add_word(
     on_new_meanings: Callable[[list[int]], None] | None = None,
 ) -> dict:
     """
-    创建单词。可选 library_id（数字 ID 或 "default"=默认收藏）：
+    创建单词。可选 library_id（数字 ID，或 "default"=默认收藏 / "review"=生词本）：
     单词入全局表的同时加进该词库（已存在的单词只加词库，幂等），需要登录。
     不传 library_id 时行为与原桌面端后端一致。
 
@@ -124,6 +136,8 @@ def add_word(
         if library_id:
             if library_id == "default":
                 library_id = libraries_service.ensure_default_library(user_id).id
+            elif library_id == "review":
+                library_id = libraries_service.ensure_review_library(user_id).id
             elif not libraries_service.owned_library(user_id, library_id):
                 db.session.rollback()
                 return {"code": 400, "msg": "词库不存在"}
@@ -146,8 +160,38 @@ def add_word(
         return unexpected_error_response(e, db.session)
 
 
-def lookup(data: dict) -> dict:
-    """查词，不自动存库；saved 标记该词是否已在库中"""
+def remove_from_library(data: dict, user_id: int | None = None) -> dict:
+    """按 word 文本把词从指定词库移除（library_id: "default"=默认收藏 / "review"=生词本）。
+    只用于划词弹窗的取消收藏——单词本身不存在，或压根没在这个词库里，都直接当成功处理（幂等）。"""
+    word_text = (data.get("word") or "").strip()
+    library_id = data.get("library_id")
+    if not word_text or not library_id:
+        return {"code": 400, "msg": "word / library_id 不能为空"}
+    if user_id is None:
+        return {"code": 401, "msg": "未登录或登录已过期"}
+
+    try:
+        existing = EnDesktopWord.select_one_by({"word": word_text})
+        if not existing:
+            return {"code": 200, "msg": "success", "data": None}
+
+        if library_id == "default":
+            lib_id = libraries_service.ensure_default_library(user_id).id
+        elif library_id == "review":
+            lib_id = libraries_service.ensure_review_library(user_id).id
+        else:
+            return {"code": 400, "msg": "非法的 library_id"}
+
+        return libraries_service.remove_word_from_library(
+            user_id, {"library_id": lib_id, "word_id": existing.id}
+        )
+    except Exception as e:
+        return unexpected_error_response(e, db.session)
+
+
+def lookup(data: dict, user_id: int | None = None) -> dict:
+    """查词，不自动存库；saved/saved_vocab 分别标记该词是否已在当前用户的
+    "默认收藏"/"生词本"词库里（未登录恒为 False）"""
     word_text = (data.get("word") or "").strip()
     if not word_text:
         return {"code": 400, "msg": "word 不能为空"}
@@ -164,7 +208,16 @@ def lookup(data: dict) -> dict:
 
     try:
         existing = EnDesktopWord.select_one_by({"word": result["word"]})
-        result["saved"] = existing is not None
+        if existing and user_id:
+            default_favorited = libraries_service._favorited_word_ids(user_id, [existing.id])
+            vocab_favorited = libraries_service._favorited_word_ids(
+                user_id, [existing.id], libraries_service.ensure_review_library(user_id)
+            )
+            result["saved"] = existing.id in default_favorited
+            result["saved_vocab"] = existing.id in vocab_favorited
+        else:
+            result["saved"] = False
+            result["saved_vocab"] = False
         return {"code": 200, "msg": "success", "data": result}
     except Exception as e:
         return unexpected_error_response(e, db.session)

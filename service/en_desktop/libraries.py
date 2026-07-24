@@ -19,8 +19,8 @@ from model.en_desktop import (
 )
 
 DEFAULT_LIBRARY_NAME = "默认收藏"
-REVIEW_LIBRARY_NAME = "未掌握"
-# 系统默认词库（自动创建、不可改名/删除）：默认收藏=划词收藏入口，未掌握=复习清单
+REVIEW_LIBRARY_NAME = "生词本"
+# 系统默认词库（自动创建、不可改名/删除）：默认收藏=划词收藏入口，生词本=另一个独立的收藏目标
 PROTECTED_LIBRARY_NAMES = (DEFAULT_LIBRARY_NAME, REVIEW_LIBRARY_NAME)
 
 
@@ -38,7 +38,7 @@ def ensure_default_library(user_id: int) -> EnDesktopWordLibrary:
 
 
 def ensure_review_library(user_id: int) -> EnDesktopWordLibrary:
-    """未掌握（复习）词库，不存在则创建"""
+    """生词本词库，不存在则创建"""
     return _ensure_named_library(user_id, REVIEW_LIBRARY_NAME)
 
 
@@ -123,15 +123,17 @@ def _favorited_ids(user_id: int) -> set:
     return {f.word_library_id for f in favs}
 
 
-def _favorited_word_ids(user_id: int | None, word_ids: list) -> set:
-    """word_id 是否在当前用户"默认收藏"词库里；未登录或无待查词时直接返回空集"""
+def _favorited_word_ids(
+    user_id: int | None, word_ids: list, lib: EnDesktopWordLibrary | None = None
+) -> set:
+    """word_id 是否在 lib 词库里（不传则取当前用户"默认收藏"）；未登录或无待查词时直接返回空集"""
     if not user_id or not word_ids:
         return set()
-    default_lib = ensure_default_library(user_id)
+    target_lib = lib or ensure_default_library(user_id)
     rows = (
         db.session.query(EnDesktopWordLibraryItem.word_id)
         .where(
-            EnDesktopWordLibraryItem.word_library_id == default_lib.id,
+            EnDesktopWordLibraryItem.word_library_id == target_lib.id,
             EnDesktopWordLibraryItem.word_id.in_(word_ids),
             EnDesktopWordLibraryItem.deleted_at.is_(None),
         )

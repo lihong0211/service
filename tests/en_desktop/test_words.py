@@ -1,7 +1,9 @@
 """
 en-desktop 单词服务测试
 """
-from model.en_desktop import EnDesktopWord, EnDesktopWordMeaning, EnDesktopWordSentence
+import pytest
+
+from model.en_desktop import EnDesktopUser, EnDesktopWord, EnDesktopWordMeaning, EnDesktopWordSentence
 from service.en_desktop import words
 
 WORD_PAYLOAD = {
@@ -10,6 +12,11 @@ WORD_PAYLOAD = {
     "us_pronunciation": "/ˈæp.əl/",
     "meaning": [{"type": "n.", "content": "苹果"}],
 }
+
+
+@pytest.fixture
+def user_id(en_desktop_db):
+    return EnDesktopUser.insert({"username": "alice"})
 
 
 def test_add_and_get_word(en_desktop_db):
@@ -55,6 +62,24 @@ def test_list_words_pagination(en_desktop_db):
     assert page1["data"]["total"] == 15
     assert len(page2["data"]["list"]) == 5
     assert page1["data"]["list"][0]["meaning"]
+
+
+def test_list_words_marks_favorited_for_current_user(user_id):
+    word_id = words.add_word(dict(WORD_PAYLOAD))["data"]["id"]
+
+    # 未登录：favorited 恒为 False
+    anon = words.list_words(page=1, page_size=10)
+    assert anon["data"]["list"][0]["favorited"] is False
+
+    # 登录但还没收藏：也是 False
+    result = words.list_words(page=1, page_size=10, user_id=user_id)
+    assert result["data"]["list"][0]["favorited"] is False
+
+    # 收进"默认收藏"后：True，且只对这个用户成立
+    words.add_word({**WORD_PAYLOAD, "library_id": "default"}, user_id=user_id)
+    result = words.list_words(page=1, page_size=10, user_id=user_id)
+    assert result["data"]["list"][0]["favorited"] is True
+    assert result["data"]["list"][0]["id"] == word_id
 
 
 def test_update_word_replaces_meanings(en_desktop_db):
@@ -104,7 +129,7 @@ def test_delete_word_is_soft(en_desktop_db):
     assert EnDesktopWord.get_by_id(word_id) is None
 
 
-def test_lookup_marks_saved(en_desktop_db, monkeypatch):
+def test_lookup_marks_saved(user_id, monkeypatch):
     fake = {
         "word": "apple",
         "meaning": [{"type": "n.", "content": "苹果"}],
@@ -117,9 +142,83 @@ def test_lookup_marks_saved(en_desktop_db, monkeypatch):
     assert result["code"] == 200
     assert result["data"]["saved"] is False
 
+    # 词进了全局词典表，但还没收进任何人的"默认收藏"：saved 不该因此变 True
     words.add_word(dict(WORD_PAYLOAD))
-    result = words.lookup({"word": "apple"})
+    result = words.lookup({"word": "apple"}, user_id)
+    assert result["data"]["saved"] is False
+
+    # 未登录查词：即使这个词已经被 user_id 收藏了，也无法得知，恒为 False
+    words.add_word({**WORD_PAYLOAD, "library_id": "default"}, user_id=user_id)
+    assert words.lookup({"word": "apple"})["data"]["saved"] is False
+
+    # 登录后查同一个词：确实在自己的"默认收藏"里，saved 才是 True
+    result = words.lookup({"word": "apple"}, user_id)
     assert result["data"]["saved"] is True
+
+
+def test_lookup_marks_saved_vocab_independently_of_default(user_id, monkeypatch):
+    """saved（默认收藏）和 saved_vocab（生词本）是两个独立的收藏目标，互不影响"""
+    fake = {
+        "word": "apple",
+        "meaning": [{"type": "n.", "content": "苹果"}],
+        "en_pronunciation": "/ˈæp.əl/",
+        "us_pronunciation": "/ˈæp.əl/",
+    }
+    monkeypatch.setattr(words.dictionary, "lookup_word", lambda w: dict(fake))
+
+    words.add_word({**WORD_PAYLOAD, "library_id": "default"}, user_id=user_id)
+    result = words.lookup({"word": "apple"}, user_id)
+    assert result["data"]["saved"] is True
+    assert result["data"]["saved_vocab"] is False
+
+    words.add_word({**WORD_PAYLOAD, "library_id": "review"}, user_id=user_id)
+    result = words.lookup({"word": "apple"}, user_id)
+    assert result["data"]["saved"] is True
+    assert result["data"]["saved_vocab"] is True
+
+
+def test_add_word_with_review_library_sentinel(user_id):
+    result = words.add_word({**WORD_PAYLOAD, "library_id": "review"}, user_id=user_id)
+    assert result["code"] == 200
+
+    from service.en_desktop import libraries as libraries_service
+
+    review_lib = libraries_service.ensure_review_library(user_id)
+    lib_words = libraries_service.library_words(user_id, review_lib.id)
+    assert lib_words["data"]["total"] == 1
+    assert lib_words["data"]["list"][0]["word"] == "apple"
+
+
+def test_remove_from_library_toggles_saved_state(user_id, monkeypatch):
+    """划词弹窗的取消收藏：加入后能再移除，而不是加入了就锁死"""
+    fake = {
+        "word": "apple",
+        "meaning": [{"type": "n.", "content": "苹果"}],
+        "en_pronunciation": "/ˈæp.əl/",
+        "us_pronunciation": "/ˈæp.əl/",
+    }
+    monkeypatch.setattr(words.dictionary, "lookup_word", lambda w: dict(fake))
+
+    words.add_word({**WORD_PAYLOAD, "library_id": "default"}, user_id=user_id)
+    assert words.lookup({"word": "apple"}, user_id)["data"]["saved"] is True
+
+    result = words.remove_from_library({"word": "apple", "library_id": "default"}, user_id)
+    assert result["code"] == 200
+    assert words.lookup({"word": "apple"}, user_id)["data"]["saved"] is False
+
+    # 移除后还能再加回去（不是一次性操作）
+    words.add_word({**WORD_PAYLOAD, "library_id": "default"}, user_id=user_id)
+    assert words.lookup({"word": "apple"}, user_id)["data"]["saved"] is True
+
+
+def test_remove_from_library_validation_and_idempotency(user_id):
+    words.add_word(dict(WORD_PAYLOAD))
+    assert words.remove_from_library({"word": "", "library_id": "default"}, user_id)["code"] == 400
+    assert words.remove_from_library({"word": "apple", "library_id": ""}, user_id)["code"] == 400
+    assert words.remove_from_library({"word": "apple", "library_id": "default"}, None)["code"] == 401
+    assert words.remove_from_library({"word": "apple", "library_id": "bogus"}, user_id)["code"] == 400
+    # 单词压根不存在：幂等地当成功处理，不报错
+    assert words.remove_from_library({"word": "nonexistent", "library_id": "default"}, user_id)["code"] == 200
 
 
 def test_lookup_not_found_and_error(en_desktop_db, monkeypatch):
