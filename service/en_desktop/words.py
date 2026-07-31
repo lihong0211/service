@@ -101,7 +101,7 @@ def add_word(
     word_meaning id 列表回调一次，不影响返回给调用方的响应内容——调用方（路由层）拿这个
     去挂 BackgroundTasks 触发例句自动生成，跟单词是否创建成功这件事完全解耦。
     """
-    word_text = (data.get("word") or "").strip()
+    word_text = (data.get("word") or "").strip().lower()
     en_pronunciation = data.get("en_pronunciation") or ""
     us_pronunciation = data.get("us_pronunciation") or ""
     meaning = data.get("meaning") or []
@@ -109,6 +109,8 @@ def add_word(
 
     if not word_text or len(word_text) > 30:
         return {"code": 400, "msg": "word 不能为空且不超过30个字符"}
+    if len(word_text.split()) > 1:
+        return {"code": 400, "msg": "暂不支持多词短语"}
     if not en_pronunciation or not us_pronunciation:
         return {"code": 400, "msg": "en_pronunciation / us_pronunciation 不能为空"}
     if library_id and user_id is None:
@@ -163,7 +165,7 @@ def add_word(
 def remove_from_library(data: dict, user_id: int | None = None) -> dict:
     """按 word 文本把词从指定词库移除（library_id: "default"=默认收藏 / "review"=生词本）。
     只用于划词弹窗的取消收藏——单词本身不存在，或压根没在这个词库里，都直接当成功处理（幂等）。"""
-    word_text = (data.get("word") or "").strip()
+    word_text = (data.get("word") or "").strip().lower()
     library_id = data.get("library_id")
     if not word_text or not library_id:
         return {"code": 400, "msg": "word / library_id 不能为空"}
@@ -192,9 +194,11 @@ def remove_from_library(data: dict, user_id: int | None = None) -> dict:
 def lookup(data: dict, user_id: int | None = None) -> dict:
     """查词，不自动存库；saved/saved_vocab 分别标记该词是否已在当前用户的
     "默认收藏"/"生词本"词库里（未登录恒为 False）"""
-    word_text = (data.get("word") or "").strip()
+    word_text = (data.get("word") or "").strip().lower()
     if not word_text:
         return {"code": 400, "msg": "word 不能为空"}
+    if len(word_text.split()) > 1:
+        return {"code": 400, "msg": "暂不支持多词短语查询"}
 
     try:
         result = dictionary.lookup_word(word_text)

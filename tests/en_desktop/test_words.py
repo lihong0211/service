@@ -45,6 +45,21 @@ def test_add_word_validation(en_desktop_db):
     assert words.add_word({"word": "ok"})["code"] == 400  # 缺音标
 
 
+def test_add_word_normalizes_case_and_rejects_phrase(en_desktop_db):
+    result = words.add_word({**WORD_PAYLOAD, "word": "Apple"})
+    assert result["code"] == 200
+    assert result["data"]["word"] == "apple"
+
+    # 大小写不同也算已存在（存的是小写）
+    dup = words.add_word({**WORD_PAYLOAD, "word": "APPLE"})
+    assert dup["code"] == 500
+    assert dup["msg"] == "单词已存在"
+
+    phrase = words.add_word({**WORD_PAYLOAD, "word": "ice cream"})
+    assert phrase["code"] == 400
+    assert phrase["msg"] == "暂不支持多词短语"
+
+
 def test_list_words_pagination(en_desktop_db):
     for i in range(15):
         words.add_word(
@@ -234,6 +249,30 @@ def test_lookup_not_found_and_error(en_desktop_db, monkeypatch):
     assert "YOUDAO" in result["msg"]
 
     assert words.lookup({})["code"] == 400
+
+
+def test_lookup_normalizes_case_and_rejects_phrase(en_desktop_db, monkeypatch):
+    captured = {}
+
+    def fake_lookup(w):
+        captured["word"] = w
+        return {
+            "word": w,
+            "meaning": [{"type": "n.", "content": "苹果"}],
+            "en_pronunciation": "/ˈæp.əl/",
+            "us_pronunciation": "/ˈæp.əl/",
+        }
+
+    monkeypatch.setattr(words.dictionary, "lookup_word", fake_lookup)
+
+    result = words.lookup({"word": "Apple"})
+    assert result["code"] == 200
+    assert captured["word"] == "apple"
+    assert result["data"]["word"] == "apple"
+
+    phrase = words.lookup({"word": "ice cream"})
+    assert phrase["code"] == 400
+    assert phrase["msg"] == "暂不支持多词短语查询"
 
 
 def test_get_word_meaning_carries_sentence(en_desktop_db):
